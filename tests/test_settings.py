@@ -1,0 +1,35 @@
+import sys, os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+import json, tempfile, pytest
+from core.settings import SettingsStore
+
+def make_store():
+    f = tempfile.NamedTemporaryFile(suffix='.json', delete=False)
+    f.close()
+    return SettingsStore(f.name)
+
+def test_default_values():
+    store = make_store()
+    assert store.get('temp_box_timeout') == 3
+    assert store.get('auto_translate_interval') == 2
+    assert store.get('target_language') == 'zh-CN'
+    assert store.get('hotkey_select') == 'alt+q'
+    assert store.get('hotkey_explain') == 'alt+e'
+    assert isinstance(store.get('translation_order'), list)
+
+def test_set_and_persist():
+    f = tempfile.NamedTemporaryFile(suffix='.json', delete=False)
+    f.close()
+    store = SettingsStore(f.name)
+    store.set('temp_box_timeout', 5)
+    store2 = SettingsStore(f.name)
+    assert store2.get('temp_box_timeout') == 5
+
+def test_get_nonexistent_returns_default():
+    store = make_store()
+    assert store.get('nonexistent', 'fallback') == 'fallback'
+
+def test_api_key():
+    store = make_store()
+    store.set_api_key('deepseek_key', 'sk-test123')
+    assert store.get_api_key('deepseek_key') == 'sk-test123'
