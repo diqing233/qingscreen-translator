@@ -9,6 +9,7 @@ class CoreController(QObject):
     # 用信号将 pynput 子线程事件安全转发到 Qt 主线程
     _sig_start_selection = pyqtSignal()
     _sig_trigger_explain = pyqtSignal()
+    _sig_toggle_boxes    = pyqtSignal()
 
     def __init__(self, app: QApplication):
         super().__init__()
@@ -25,6 +26,7 @@ class CoreController(QObject):
         # 连接内部信号到主线程槽
         self._sig_start_selection.connect(self._start_selection)
         self._sig_trigger_explain.connect(self._trigger_explain)
+        self._sig_toggle_boxes.connect(self._toggle_boxes)
 
     def start(self):
         from translation.router import TranslationRouter
@@ -68,9 +70,13 @@ class CoreController(QObject):
             def on_activate_explain():
                 self._sig_trigger_explain.emit()
 
+            def on_activate_toggle():
+                self._sig_toggle_boxes.emit()
+
             hotkeys = keyboard.GlobalHotKeys({
                 '<alt>+q': on_activate_select,
                 '<alt>+e': on_activate_explain,
+                '<alt>+w': on_activate_toggle,
             })
             hotkeys.start()
             self._hotkey_listener = hotkeys
@@ -102,6 +108,9 @@ class CoreController(QObject):
             text = self.result_bar._current_result.get('original', '')
             if text:
                 self._on_explain_requested(text)
+
+    def _toggle_boxes(self):
+        self.box_manager.toggle_all_visibility()
 
     def _on_selection_made(self, rect):
         # 非多框模式：清除之前的框

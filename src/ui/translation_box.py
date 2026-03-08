@@ -121,9 +121,8 @@ class TranslationBox(QWidget):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        bg = QColor(15, 15, 25, 70) if self.mode == self.MODE_FIXED else QColor(15, 15, 25, 45)
-        painter.fillRect(self.rect(), bg)
-        border_color = QColor(80, 160, 255, 220) if self.mode == self.MODE_FIXED else QColor(255, 255, 255, 120)
+        # 框内完全透明，只绘制虚线边框
+        border_color = QColor(80, 160, 255, 200) if self.mode == self.MODE_FIXED else QColor(220, 220, 255, 160)
         pen = QPen(border_color, 1, Qt.DashLine)
         painter.setPen(pen)
         painter.drawRect(0, 0, self.width() - 1, self.height() - 1)

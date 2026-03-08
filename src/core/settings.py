@@ -9,6 +9,7 @@ DEFAULTS = {
     'source_language': 'auto',
     'hotkey_select': 'alt+q',
     'hotkey_explain': 'alt+e',
+    'hotkey_toggle_boxes': 'alt+w',
     'result_bar_opacity': 0.85,
     'result_bar_position': 'top',
     'translation_order': ['dictionary', 'google', 'baidu', 'deepl', 'deepseek', 'openai', 'claude'],

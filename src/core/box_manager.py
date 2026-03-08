@@ -43,3 +43,16 @@ class BoxManager(QObject):
     def clear_all(self):
         for box in list(self._boxes.values()):
             self._remove_box(box)
+
+    def toggle_all_visibility(self):
+        """切换所有框的显示/隐藏状态（用于快捷键）"""
+        if not self._boxes:
+            return
+        # 若有任意框可见则全部隐藏，否则全部显示
+        any_visible = any(b.isVisible() for b in self._boxes.values())
+        if any_visible:
+            for b in self._boxes.values():
+                b.hide()
+        else:
+            for b in self._boxes.values():
+                b.show()

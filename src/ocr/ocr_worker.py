@@ -1,9 +1,24 @@
 import logging
+import time
 import mss
 import numpy as np
 from PyQt5.QtCore import QThread, pyqtSignal, QRect
 
 logger = logging.getLogger(__name__)
+
+
+def _get_dpr() -> float:
+    """获取主屏幕设备像素比（处理 Windows DPI 缩放）"""
+    try:
+        from PyQt5.QtWidgets import QApplication
+        app = QApplication.instance()
+        if app:
+            screen = app.primaryScreen()
+            return screen.devicePixelRatio() if screen else 1.0
+    except Exception:
+        pass
+    return 1.0
+
 
 class OCRWorker(QThread):
     result_ready = pyqtSignal(str, object)
@@ -14,12 +29,16 @@ class OCRWorker(QThread):
         self.region = region
 
     def run(self):
+        # 等待覆盖层和框窗口完全从合成器消失，避免截到自身
+        time.sleep(0.18)
         try:
             img = self._capture()
             if img is None:
                 self.error_occurred.emit('截图失败')
                 return
+            logger.debug(f'截图尺寸: {img.shape}, 区域: {self.region.x()},{self.region.y()} {self.region.width()}x{self.region.height()}')
             text = self._extract_text(img)
+            logger.debug(f'OCR 结果: {repr(text[:80]) if text else "(空)"}')
             self.result_ready.emit(text, self.region)
         except Exception as e:
             logger.exception('OCR failed')
@@ -27,21 +46,26 @@ class OCRWorker(QThread):
 
     def _capture(self):
         r = self.region
+        dpr = _get_dpr()
+        # 修正 DPI 缩放：Qt 逻辑像素 → mss 物理像素
+        left   = int(r.x() * dpr)
+        top    = int(r.y() * dpr)
+        width  = max(int(r.width() * dpr), 10)
+        height = max(int(r.height() * dpr), 10)
+        logger.debug(f'DPR={dpr:.2f}, 截图物理区域: {left},{top} {width}x{height}')
         with mss.mss() as sct:
-            monitor = {
-                'left': r.x(), 'top': r.y(),
-                'width': max(r.width(), 10), 'height': max(r.height(), 10)
-            }
+            monitor = {'left': left, 'top': top, 'width': width, 'height': height}
             screenshot = sct.grab(monitor)
             img = np.array(screenshot)
-            return img[:, :, :3]
+            return img[:, :, :3]  # 去掉 alpha 通道，返回 BGR
 
     def _extract_text(self, img) -> str:
-        # 方案1: RapidOCR（推荐，轻量，支持中英文）
+        # ── 方案1: RapidOCR ─────────────────────────────────
         try:
             from rapidocr_onnxruntime import RapidOCR
             engine = RapidOCR()
-            result, _ = engine(img)
+            result, elapse = engine(img)
+            logger.debug(f'RapidOCR 耗时: {elapse:.3f}s, 行数: {len(result) if result else 0}')
             if result:
                 return ' '.join([line[1] for line in result if line and len(line) > 1]).strip()
             return ''
@@ -50,11 +74,12 @@ class OCRWorker(QThread):
         except Exception as e:
             logger.warning(f'RapidOCR failed: {e}')
 
-        # 方案2: EasyOCR
+        # ── 方案2: EasyOCR ──────────────────────────────────
         try:
             import easyocr
             reader = easyocr.Reader(['ch_sim', 'en'], gpu=False, verbose=False)
             result = reader.readtext(img)
+            logger.debug(f'EasyOCR 结果: {len(result)} 行')
             if result:
                 return ' '.join([r[1] for r in result]).strip()
             return ''
@@ -63,7 +88,7 @@ class OCRWorker(QThread):
         except Exception as e:
             logger.warning(f'EasyOCR failed: {e}')
 
-        # 方案3: PaddleOCR（Python <= 3.12）
+        # ── 方案3: PaddleOCR ────────────────────────────────
         try:
             from paddleocr import PaddleOCR
             ocr = PaddleOCR(use_angle_cls=True, lang='ch', show_log=False)
@@ -82,7 +107,7 @@ class OCRWorker(QThread):
         except Exception as e:
             logger.warning(f'PaddleOCR failed: {e}')
 
-        # 方案4: pytesseract（需系统安装 Tesseract）
+        # ── 方案4: pytesseract ──────────────────────────────
         try:
             from PIL import Image
             import pytesseract
@@ -91,6 +116,7 @@ class OCRWorker(QThread):
         except Exception as e:
             logger.warning(f'pytesseract failed: {e}')
 
+        logger.error('所有 OCR 引擎均不可用')
         return ''
 
 

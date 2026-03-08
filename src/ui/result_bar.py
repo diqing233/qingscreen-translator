@@ -89,8 +89,12 @@ class ResultBar(QWidget):
 
         tb.addSpacing(6)
 
-        # 语言方向标签
-        self._lbl_lang = QLabel('-- → --')
+        # 语言方向标签（默认显示设置中的目标语言）
+        default_tgt = self.settings.get('target_language', 'zh-CN')
+        tgt_names = {'zh-CN': '简中', 'zh-TW': '繁中', 'en': 'EN',
+                     'ja': 'JA', 'ko': 'KO', 'fr': 'FR', 'de': 'DE'}
+        tgt_label = tgt_names.get(default_tgt, default_tgt)
+        self._lbl_lang = QLabel(f'自动 → {tgt_label}')
         self._lbl_lang.setStyleSheet('color: rgba(160,160,180,200); font-size: 11px;')
         tb.addWidget(self._lbl_lang)
 

@@ -67,6 +67,10 @@ class SettingsWindow(QDialog):
         self._edit_hotkey_explain.setPlaceholderText('如：alt+e')
         form.addRow('AI解释热键:', self._edit_hotkey_explain)
 
+        self._edit_hotkey_toggle = QLineEdit()
+        self._edit_hotkey_toggle.setPlaceholderText('如：alt+w')
+        form.addRow('显示/隐藏框热键:', self._edit_hotkey_toggle)
+
         tabs.addTab(gen, '通用')
 
         # ── 翻译来源 ──────────────────────────────────────────
@@ -136,6 +140,7 @@ class SettingsWindow(QDialog):
 
         self._edit_hotkey_select.setText(self.settings.get('hotkey_select', 'alt+q'))
         self._edit_hotkey_explain.setText(self.settings.get('hotkey_explain', 'alt+e'))
+        self._edit_hotkey_toggle.setText(self.settings.get('hotkey_toggle_boxes', 'alt+w'))
 
         order = self.settings.get('translation_order', list(BACKEND_LABELS.keys()))
         enabled = set(self.settings.get('enabled_backends', ['dictionary', 'google']))
@@ -157,6 +162,7 @@ class SettingsWindow(QDialog):
         self.settings.set('result_bar_position', self._combo_pos.currentData())
         self.settings.set('hotkey_select', self._edit_hotkey_select.text())
         self.settings.set('hotkey_explain', self._edit_hotkey_explain.text())
+        self.settings.set('hotkey_toggle_boxes', self._edit_hotkey_toggle.text())
 
         order, enabled = [], []
         for i in range(self._list_backends.count()):

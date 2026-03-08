@@ -4,12 +4,15 @@ import logging
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+LOG_DIR = os.path.expanduser('~/.screen_translator')
+os.makedirs(LOG_DIR, exist_ok=True)
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s %(levelname)s %(name)s: %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler(os.path.expanduser('~/.screen_translator/app.log'), encoding='utf-8'),
+        logging.FileHandler(os.path.join(LOG_DIR, 'app.log'), encoding='utf-8'),
     ]
 )
 logger = logging.getLogger(__name__)
@@ -18,7 +21,6 @@ from PyQt5.QtWidgets import QApplication, QMessageBox
 from PyQt5.QtCore import Qt
 
 def main():
-    os.makedirs(os.path.expanduser('~/.screen_translator'), exist_ok=True)
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setAttribute(Qt.AA_EnableHighDpiScaling, True)
