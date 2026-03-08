@@ -1,19 +1,30 @@
 import logging
 from PyQt5.QtWidgets import QApplication
-from PyQt5.QtCore import QObject
+from PyQt5.QtCore import QObject, pyqtSignal, QTimer
 
 logger = logging.getLogger(__name__)
 
 
 class CoreController(QObject):
+    # 用信号将 pynput 子线程事件安全转发到 Qt 主线程
+    _sig_start_selection = pyqtSignal()
+    _sig_trigger_explain = pyqtSignal()
+
     def __init__(self, app: QApplication):
         super().__init__()
         self.app = app
-        self._workers = []  # keep workers alive
+        self._workers = []
+        self._box_mode = 'temp'        # 'temp' | 'fixed' | 'multi'
+        self._translate_mode = 'manual'  # 'manual' | 'auto'
+
         from core.settings import SettingsStore
         from core.history import HistoryDB
         self.settings = SettingsStore()
         self.history = HistoryDB()
+
+        # 连接内部信号到主线程槽
+        self._sig_start_selection.connect(self._start_selection)
+        self._sig_trigger_explain.connect(self._trigger_explain)
 
     def start(self):
         from translation.router import TranslationRouter
@@ -34,7 +45,9 @@ class CoreController(QObject):
         self.result_bar.explain_requested.connect(self._on_explain_requested)
         self.result_bar.history_requested.connect(self._show_history)
         self.result_bar.settings_requested.connect(self._show_settings)
-        self.tray.select_triggered.connect(self._start_selection)
+        self.result_bar.box_mode_changed.connect(self._on_box_mode_changed)
+        self.result_bar.translate_mode_changed.connect(self._on_translate_mode_changed)
+        self.tray.select_triggered.connect(self._sig_start_selection)
         self.tray.settings_triggered.connect(self._show_settings)
         self.tray.history_triggered.connect(self._show_history)
         self.tray.quit_triggered.connect(self.app.quit)
@@ -48,11 +61,12 @@ class CoreController(QObject):
         try:
             from pynput import keyboard
 
+            # 注意：pynput 回调在子线程，必须通过 pyqtSignal 转发到主线程
             def on_activate_select():
-                self._start_selection()
+                self._sig_start_selection.emit()
 
             def on_activate_explain():
-                self._trigger_explain()
+                self._sig_trigger_explain.emit()
 
             hotkeys = keyboard.GlobalHotKeys({
                 '<alt>+q': on_activate_select,
@@ -60,8 +74,25 @@ class CoreController(QObject):
             })
             hotkeys.start()
             self._hotkey_listener = hotkeys
+            logger.info('热键注册成功: Alt+Q (框选), Alt+E (解释)')
         except Exception as e:
             logger.warning(f'热键设置失败: {e}')
+
+    def _on_box_mode_changed(self, mode: str):
+        self._box_mode = mode
+        logger.debug(f'Box mode -> {mode}')
+
+    def _on_translate_mode_changed(self, mode: str):
+        self._translate_mode = mode
+        logger.debug(f'Translate mode -> {mode}')
+        # 如果切换到自动，对所有固定框启动自动翻译
+        if mode == 'auto':
+            for box in self.box_manager._boxes.values():
+                if box.mode == 'fixed':
+                    box.start_auto_translate()
+        else:
+            for box in self.box_manager._boxes.values():
+                box.stop_auto_translate()
 
     def _start_selection(self):
         self.overlay.show_overlay()
@@ -73,7 +104,21 @@ class CoreController(QObject):
                 self._on_explain_requested(text)
 
     def _on_selection_made(self, rect):
+        # 非多框模式：清除之前的框
+        if self._box_mode != 'multi':
+            self.box_manager.clear_all()
+
         box = self.box_manager.create_box(rect)
+
+        # 根据当前模式设置框的行为
+        if self._box_mode == 'temp':
+            box.set_mode('temp')
+        else:
+            box.set_mode('fixed')
+            if self._translate_mode == 'auto':
+                # 翻译完成后再启动自动轮询
+                box._pending_auto = True
+
         self.result_bar.show_loading('识别中...')
         self._run_ocr(box)
 
@@ -117,7 +162,12 @@ class CoreController(QObject):
             )
         except Exception as e:
             logger.warning(f'History save failed: {e}')
-        box.start_dismiss_timer()
+
+        if box.mode == 'temp':
+            box.start_dismiss_timer()
+        elif getattr(box, '_pending_auto', False):
+            box._pending_auto = False
+            box.start_auto_translate()
 
     def _on_translate_box(self, box):
         self._run_ocr(box)
@@ -150,6 +200,7 @@ class CoreController(QObject):
         if not hasattr(self, '_settings_win') or self._settings_win is None or not self._settings_win.isVisible():
             self._settings_win = SettingsWindow(self.settings)
             self._settings_win.settings_saved.connect(self.router.reload)
+            self._settings_win.settings_saved.connect(self.result_bar.refresh_opacity)
             self._settings_win.show()
         else:
             self._settings_win.activateWindow()
