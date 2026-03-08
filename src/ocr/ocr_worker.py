@@ -37,6 +37,33 @@ class OCRWorker(QThread):
             return img[:, :, :3]
 
     def _extract_text(self, img) -> str:
+        # 方案1: RapidOCR（推荐，轻量，支持中英文）
+        try:
+            from rapidocr_onnxruntime import RapidOCR
+            engine = RapidOCR()
+            result, _ = engine(img)
+            if result:
+                return ' '.join([line[1] for line in result if line and len(line) > 1]).strip()
+            return ''
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.warning(f'RapidOCR failed: {e}')
+
+        # 方案2: EasyOCR
+        try:
+            import easyocr
+            reader = easyocr.Reader(['ch_sim', 'en'], gpu=False, verbose=False)
+            result = reader.readtext(img)
+            if result:
+                return ' '.join([r[1] for r in result]).strip()
+            return ''
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.warning(f'EasyOCR failed: {e}')
+
+        # 方案3: PaddleOCR（Python <= 3.12）
         try:
             from paddleocr import PaddleOCR
             ocr = PaddleOCR(use_angle_cls=True, lang='ch', show_log=False)
@@ -51,14 +78,20 @@ class OCRWorker(QThread):
                         lines.append(str(text_info[0]))
             return ' '.join(lines).strip()
         except ImportError:
-            # PaddleOCR 未安装时降级到 pytesseract（如果可用）
-            try:
-                from PIL import Image
-                import pytesseract
-                pil_img = Image.fromarray(img)
-                return pytesseract.image_to_string(pil_img, lang='chi_sim+eng').strip()
-            except Exception:
-                return ''
+            pass
+        except Exception as e:
+            logger.warning(f'PaddleOCR failed: {e}')
+
+        # 方案4: pytesseract（需系统安装 Tesseract）
+        try:
+            from PIL import Image
+            import pytesseract
+            pil_img = Image.fromarray(img)
+            return pytesseract.image_to_string(pil_img, lang='chi_sim+eng').strip()
+        except Exception as e:
+            logger.warning(f'pytesseract failed: {e}')
+
+        return ''
 
 
 class TranslationWorker(QThread):
