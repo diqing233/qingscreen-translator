@@ -13,6 +13,7 @@ DEFAULTS = {
     'hotkey_mode_temp': 'alt+1',
     'hotkey_mode_fixed': 'alt+2',
     'hotkey_mode_multi': 'alt+3',
+    'hotkey_mode_ai': 'alt+4',
     'result_bar_opacity': 0.85,
     'result_bar_position': 'right',
     'result_bar_size': 'default',
