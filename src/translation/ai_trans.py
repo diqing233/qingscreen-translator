@@ -18,6 +18,17 @@ LANG_NAMES = {
     'es': '西班牙语', 'ru': '俄语', 'ar': '阿拉伯语',
 }
 
+# OpenAI 兼容后端配置
+_OAI_CONFIGS = {
+    'openai':      ('https://api.openai.com/v1',              'gpt-4o-mini'),
+    'deepseek':    ('https://api.deepseek.com/v1',            'deepseek-chat'),
+    # ── 国内免费/低价 ──────────────────────────────────────────
+    'zhipu':       ('https://open.bigmodel.cn/api/paas/v4',   'glm-4-flash'),       # 永久免费
+    'siliconflow': ('https://api.siliconflow.cn/v1',          'Qwen/Qwen2.5-7B-Instruct'),  # 注册送 14 元
+    'moonshot':    ('https://api.moonshot.cn/v1',             'moonshot-v1-8k'),    # 新用户赠额度
+}
+
+
 class AIBackend:
     def __init__(self, provider: str = 'deepseek', api_key: str = ''):
         self.provider = provider
@@ -55,7 +66,7 @@ class AIBackend:
             return None
 
     def _call_api(self, prompt: str) -> Optional[str]:
-        if self.provider in ('openai', 'deepseek'):
+        if self.provider in _OAI_CONFIGS:
             return self._call_openai_compatible(prompt)
         elif self.provider == 'claude':
             return self._call_claude(prompt)
@@ -63,11 +74,10 @@ class AIBackend:
 
     def _call_openai_compatible(self, prompt: str) -> Optional[str]:
         from openai import OpenAI
-        base_urls = {'openai': 'https://api.openai.com/v1', 'deepseek': 'https://api.deepseek.com/v1'}
-        models = {'openai': 'gpt-4o-mini', 'deepseek': 'deepseek-chat'}
-        client = OpenAI(api_key=self.api_key, base_url=base_urls.get(self.provider))
+        base_url, model = _OAI_CONFIGS[self.provider]
+        client = OpenAI(api_key=self.api_key, base_url=base_url)
         resp = client.chat.completions.create(
-            model=models.get(self.provider, 'gpt-4o-mini'),
+            model=model,
             messages=[{'role': 'user', 'content': prompt}],
             max_tokens=1000, temperature=0.3,
         )

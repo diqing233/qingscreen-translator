@@ -17,13 +17,22 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# !! CRITICAL: onnxruntime must be loaded BEFORE any PyQt5 import.
+# On Windows, Qt DLL initialization breaks onnxruntime (WinError 1114).
+# ocr.engine has zero Qt imports – safe to import first.
+from ocr.engine import prewarm
+prewarm()
+
 from PyQt5.QtWidgets import QApplication, QMessageBox
 from PyQt5.QtCore import Qt
+
+# Must be set BEFORE QApplication is created, otherwise has no effect
+QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
 
 def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
-    app.setAttribute(Qt.AA_EnableHighDpiScaling, True)
 
     try:
         from core.controller import CoreController

@@ -33,6 +33,8 @@ class TranslationBox(QWidget):
     def _setup_window(self, rect: QRect):
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
         self.setAttribute(Qt.WA_TranslucentBackground)
+        # Qt.Tool 窗口不是前台窗口，WA_AlwaysShowToolTips 让悬停时立即显示 tooltip
+        self.setAttribute(Qt.WA_AlwaysShowToolTips, True)
         self.setMinimumSize(80, 50)
         self.setGeometry(rect)
 
@@ -121,7 +123,8 @@ class TranslationBox(QWidget):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        # 框内完全透明，只绘制虚线边框
+        # alpha=4 让整个窗口接收鼠标事件（Windows 分层窗口中 alpha=0 区域为穿透）
+        painter.fillRect(self.rect(), QColor(0, 0, 0, 4))
         border_color = QColor(80, 160, 255, 200) if self.mode == self.MODE_FIXED else QColor(220, 220, 255, 160)
         pen = QPen(border_color, 1, Qt.DashLine)
         painter.setPen(pen)

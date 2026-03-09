@@ -1,7 +1,10 @@
 import requests
 import hashlib
 import random
+import logging
 from typing import Optional, Dict
+
+logger = logging.getLogger(__name__)
 
 class BaiduBackend:
     API_URL = 'https://fanyi-api.baidu.com/api/trans/vip/translate'
@@ -41,6 +44,10 @@ class BaiduBackend:
                     'original': text, 'translated': translated, 'backend': 'baidu',
                     'source_lang': data.get('from', source_lang), 'target_lang': target_lang,
                 }
-        except Exception:
-            pass
+            err_code = data.get('error_code', '?')
+            err_msg  = data.get('error_msg', '')
+            logger.warning(f'百度翻译 API 错误 {err_code}: {err_msg}')
+        except Exception as e:
+            logger.warning(f'百度翻译请求失败: {e}')
         return None
+

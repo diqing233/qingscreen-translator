@@ -7,6 +7,7 @@ logger = logging.getLogger(__name__)
 
 class BoxManager(QObject):
     translate_box = pyqtSignal(object)
+    box_removed   = pyqtSignal(int)   # box_id
 
     def __init__(self, settings, parent=None):
         super().__init__(parent)
@@ -30,6 +31,7 @@ class BoxManager(QObject):
             self._boxes[bid].hide()
             self._boxes[bid].deleteLater()
             del self._boxes[bid]
+            self.box_removed.emit(bid)
             logger.debug(f'Box {bid} removed')
 
     def hide_all(self):
