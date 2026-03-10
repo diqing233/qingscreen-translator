@@ -243,9 +243,10 @@ class ResultBar(QWidget):
         self._apply_opacity()
 
         # ── 工具栏（可横向滚动）──────────────────────────────────
-        _tb_widget = QWidget()
-        _tb_widget.setStyleSheet('background: transparent;')
-        tb = QHBoxLayout(_tb_widget)
+        self._tb_widget = QWidget()
+        self._tb_widget.setStyleSheet('background: transparent;')
+        self._tb_layout = QHBoxLayout(self._tb_widget)
+        tb = self._tb_layout
         tb.setSpacing(4)
         tb.setContentsMargins(0, 0, 0, 0)
 
@@ -321,6 +322,12 @@ class ResultBar(QWidget):
 
         tb.addSpacing(6)
 
+        # 覆盖按钮（放在工具栏内，随内容滚动）
+        self._btn_overlay = self._icon_btn('⊞', '覆盖译文到原文区域', self._on_overlay)
+        tb.addWidget(self._btn_overlay)
+
+        tb.addSpacing(6)
+
         # 滑动切换：仅固定/多框模式显示
         self._toggle = TranslateToggle()
         self._toggle.toggled.connect(self._on_toggle_changed)
@@ -329,18 +336,14 @@ class ResultBar(QWidget):
 
         tb.addStretch()
 
-        # 右侧图标按钮
-        self._btn_overlay  = self._icon_btn('⊞',  '覆盖译文到原文区域',  self._on_overlay)
+        # 右侧图标按钮（固定在滚动区外，不随工具栏内容滚动）
         self._btn_history  = self._icon_btn('🕐', '翻译历史 (History)', self.history_requested.emit)
-        self._btn_settings = self._icon_btn('⚙',  '设置 (Settings)',   self.settings_requested.emit)
-        self._btn_minimize = self._icon_btn('─',  '最小化/展开',        self._toggle_minimize)
-        self._btn_close    = self._icon_btn('✕',  '关闭主窗口',         self.close_requested.emit)
-        for b in [self._btn_overlay, self._btn_history, self._btn_settings, self._btn_minimize, self._btn_close]:
-            tb.addWidget(b)
+        self._btn_settings = self._icon_btn('⚙', '设置 (Settings)', self.settings_requested.emit)
+        self._btn_minimize = self._icon_btn('─', '最小化/展开', self._toggle_minimize)
+        self._btn_close    = self._icon_btn('✕', '关闭主窗口', self.close_requested.emit)
 
-        _tb_widget.adjustSize()
         self._tb_scroll = QScrollArea()
-        self._tb_scroll.setWidget(_tb_widget)
+        self._tb_scroll.setWidget(self._tb_widget)
         self._tb_scroll.setWidgetResizable(False)
         self._tb_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._tb_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -357,7 +360,14 @@ class ResultBar(QWidget):
             }
             QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
         ''')
-        cl.addWidget(self._tb_scroll)
+        _tb_row = QHBoxLayout()
+        _tb_row.setContentsMargins(0, 0, 0, 0)
+        _tb_row.setSpacing(2)
+        _tb_row.addWidget(self._tb_scroll, 1)
+        for b in [self._btn_history, self._btn_settings, self._btn_minimize, self._btn_close]:
+            _tb_row.addWidget(b)
+        cl.addLayout(_tb_row)
+        self._refresh_toolbar_layout()
         self._set_active_mode_btn('temp')
 
         # 分隔线
@@ -543,6 +553,16 @@ class ResultBar(QWidget):
         b.clicked.connect(cb)
         return b
 
+    def _update_lang_button_widths(self):
+        for btn in (self._btn_src_lang, self._btn_tgt_lang):
+            min_width = max(btn.sizeHint().width(), btn.fontMetrics().horizontalAdvance(btn.text()) + 20)
+            btn.setMinimumWidth(min_width)
+
+    def _refresh_toolbar_layout(self):
+        self._update_lang_button_widths()
+        self._tb_widget.adjustSize()
+        self._tb_widget.setFixedSize(self._tb_widget.sizeHint())
+
     # ── 语言下拉菜单 ──────────────────────────────────────────────
 
     def _show_src_lang_menu(self):
@@ -562,6 +582,7 @@ class ResultBar(QWidget):
             short = next(s for c, s, _ in SOURCE_LANGS if c == code)
             self.settings.set('source_language', code)
             self._btn_src_lang.setText(f'{short} ▾')
+            self._refresh_toolbar_layout()
             self.source_language_changed.emit(code)
 
     def _show_tgt_lang_menu(self):
@@ -581,6 +602,7 @@ class ResultBar(QWidget):
             short = next(s for c, s, _ in TARGET_LANGS if c == code)
             self.settings.set('target_language', code)
             self._btn_tgt_lang.setText(f'{short} ▾')
+            self._refresh_toolbar_layout()
             self.target_language_changed.emit(code)
 
     # ── 模式切换 ──────────────────────────────────────────────────
@@ -594,6 +616,7 @@ class ResultBar(QWidget):
         self._box_mode = key
         self._set_active_mode_btn(key)
         self._toggle.setVisible(key != 'temp')
+        self._refresh_toolbar_layout()
         self.box_mode_changed.emit(key)
         self._smart_adjust()
 
@@ -668,6 +691,7 @@ class ResultBar(QWidget):
             src_short = next((s for c, s, _ in SOURCE_LANGS
                               if c == src.lower() or c == src.lower().split('-')[0]), src.upper())
             self._btn_src_lang.setText(f'{src_short} ▾')
+            self._refresh_toolbar_layout()
 
         if not self.isVisible() and not self._hidden_to_tray:
             self.show()
