@@ -19,7 +19,9 @@ class TranslationBox(QWidget):
         self.mode = self.MODE_TEMP
         self._drag_pos = QPoint()
         self._ocr_text = ''
-        self._overlay_label = None
+        self._subtitle_win = None
+        self._subtitle_active = False
+        self._last_translation = ''
 
         self._auto_timer = QTimer(self)
         self._auto_timer.timeout.connect(lambda: self.translate_requested.emit(self))
@@ -52,10 +54,12 @@ class TranslationBox(QWidget):
 
         self._btn_translate = self._make_btn('🔄', '立即翻译', lambda: self.translate_requested.emit(self))
         self._btn_pin = self._make_btn('📌', '固定/取消固定', self._on_toggle_pin)
+        self._btn_subtitle = self._make_btn('⊞', '在框下方显示译文字幕', self._on_toggle_subtitle)
         self._btn_hide = self._make_btn('👁', '隐藏', self.hide)
         self._btn_close = self._make_btn('✕', '关闭', lambda: self.close_requested.emit(self))
 
-        for btn in [self._btn_translate, self._btn_pin, self._btn_hide, self._btn_close]:
+        for btn in [self._btn_translate, self._btn_pin, self._btn_subtitle,
+                    self._btn_hide, self._btn_close]:
             btn_layout.addWidget(btn)
         btn_layout.addStretch()
         self._btn_bar.setVisible(False)
@@ -111,31 +115,70 @@ class TranslationBox(QWidget):
     def stop_auto_translate(self):
         self._auto_timer.stop()
 
-    def show_translation_overlay(self, text: str):
-        """在框内用半透明遮罩覆盖原文区域，显示译文。"""
-        if self._overlay_label is None:
-            self._overlay_label = QLabel(self)
-            self._overlay_label.setAlignment(Qt.AlignCenter)
-            self._overlay_label.setWordWrap(True)
-            self._overlay_label.setAttribute(Qt.WA_TransparentForMouseEvents, False)
-            self._overlay_label.setStyleSheet('''
-                QLabel {
-                    background: rgba(15, 15, 20, 210);
-                    color: #f0f0f0;
-                    font-size: 13px;
-                    padding: 8px;
-                    border-radius: 4px;
-                }
-            ''')
-        self._overlay_label.setText(text)
-        self._overlay_label.setGeometry(0, 0, self.width(), self.height())
-        self._overlay_label.raise_()
-        self._overlay_label.show()
+    def _create_subtitle_win(self):
+        from PyQt5.QtWidgets import QLabel
+        win = QLabel()
+        win.setWindowFlags(
+            Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
+        )
+        win.setAttribute(Qt.WA_TranslucentBackground)
+        win.setWordWrap(True)
+        win.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        win.setStyleSheet('''
+            QLabel {
+                background: rgba(15, 15, 24, 210);
+                color: #f0f0f0;
+                font-size: 13px;
+                padding: 6px 12px;
+                border-top: 1px solid rgba(80, 140, 255, 100);
+                border-radius: 0px 0px 6px 6px;
+            }
+        ''')
+        return win
 
-    def hide_translation_overlay(self):
-        """隐藏覆盖译文遮罩。"""
-        if self._overlay_label is not None:
-            self._overlay_label.hide()
+    def _subtitle_geometry(self):
+        """计算字幕窗口应在的位置（box 正下方，同宽）"""
+        return (self.x(), self.y() + self.height(), self.width())
+
+    def show_subtitle(self, text: str):
+        """在框正下方显示译文字幕条。"""
+        self._last_translation = text
+        if self._subtitle_win is None:
+            self._subtitle_win = self._create_subtitle_win()
+        self._subtitle_win.setText(text)
+        x, y, w = self._subtitle_geometry()
+        self._subtitle_win.setFixedWidth(w)
+        self._subtitle_win.adjustSize()
+        self._subtitle_win.move(x, y)
+        self._subtitle_win.show()
+        self._subtitle_win.raise_()
+        self._subtitle_active = True
+        self._btn_subtitle.setStyleSheet('''
+            QPushButton {
+                background: rgba(80,140,255,180); color: white;
+                border: none; border-radius: 3px; font-size: 11px;
+            }
+            QPushButton:hover { background: rgba(100,160,255,200); }
+        ''')
+
+    def hide_subtitle(self):
+        """隐藏译文字幕条。"""
+        if self._subtitle_win is not None:
+            self._subtitle_win.hide()
+        self._subtitle_active = False
+        self._btn_subtitle.setStyleSheet('''
+            QPushButton {
+                background: rgba(30,30,40,180); color: white;
+                border: none; border-radius: 3px; font-size: 11px;
+            }
+            QPushButton:hover { background: rgba(70,70,100,220); }
+        ''')
+
+    def _on_toggle_subtitle(self):
+        if self._subtitle_active:
+            self.hide_subtitle()
+        else:
+            self.show_subtitle(self._last_translation)
 
     def _on_dismiss_timeout(self):
         if self.mode == self.MODE_TEMP:
@@ -167,7 +210,32 @@ class TranslationBox(QWidget):
             self.move(new_pos)
             self.region = QRect(new_pos.x(), new_pos.y(), self.width(), self.height())
 
+    def moveEvent(self, event):
+        super().moveEvent(event)
+        if self._subtitle_win is not None and self._subtitle_win.isVisible():
+            x, y, w = self._subtitle_geometry()
+            self._subtitle_win.move(x, y)
+
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        if self._overlay_label is not None and self._overlay_label.isVisible():
-            self._overlay_label.setGeometry(0, 0, self.width(), self.height())
+        if self._subtitle_win is not None and self._subtitle_win.isVisible():
+            x, y, w = self._subtitle_geometry()
+            self._subtitle_win.setFixedWidth(w)
+            self._subtitle_win.adjustSize()
+            self._subtitle_win.move(x, y)
+
+    def hideEvent(self, event):
+        super().hideEvent(event)
+        if self._subtitle_win is not None:
+            self._subtitle_win.hide()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self._subtitle_active and self._subtitle_win is not None:
+            self._subtitle_win.show()
+
+    def closeEvent(self, event):
+        if self._subtitle_win is not None:
+            self._subtitle_win.close()
+            self._subtitle_win = None
+        super().closeEvent(event)
