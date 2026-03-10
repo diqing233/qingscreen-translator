@@ -297,9 +297,15 @@ class CoreController(QObject):
         else:
             self.result_bar.show_result(result)
 
+        # 若该框字幕已激活，刷新字幕内容
+        translated = result.get('translated', '')
+        if getattr(box, '_subtitle_active', False):
+            box.show_subtitle(translated)
+
         if box.mode == 'temp':
             box.start_dismiss_timer()
         elif getattr(box, '_pending_auto', False):
+            # 以下两行保留自原有实现，不作修改
             box._pending_auto = False
             box.start_auto_translate()
 
@@ -325,23 +331,19 @@ class CoreController(QObject):
         worker.start()
 
     def _on_overlay_requested(self, text: str):
-        """切换所有翻译框的译文覆盖遮罩。"""
+        """切换所有翻译框的字幕条显示。"""
         boxes = list(self.box_manager._boxes.values())
         if not boxes:
             return
-        any_overlay = any(
-            getattr(b, '_overlay_label', None) is not None
-            and b._overlay_label.isVisible()
-            for b in boxes
-        )
+        any_subtitle = any(getattr(b, '_subtitle_active', False) for b in boxes)
         for box in boxes:
-            if any_overlay:
-                box.hide_translation_overlay()
+            if any_subtitle:
+                box.hide_subtitle()
             else:
                 # 多框模式：各框显示各自的译文
                 result = self._multi_results.get(box.box_id)
                 t = result.get('translated', '') if result else text
-                box.show_translation_overlay(t)
+                box.show_subtitle(t)
 
     def _cleanup_worker(self, worker):
         if worker in self._workers:
