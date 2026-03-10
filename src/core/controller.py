@@ -157,6 +157,9 @@ class CoreController(QObject):
         self._box_mode = mode
         if mode != 'multi':
             self._multi_results.clear()
+        if mode == 'fixed':
+            for box in self.box_manager._boxes.values():
+                box.set_mode('fixed')
 
     def _on_translate_mode_changed(self, mode: str):
         self._translate_mode = mode
