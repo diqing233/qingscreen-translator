@@ -299,7 +299,7 @@ class CoreController(QObject):
 
         # 若该框字幕已激活，刷新字幕内容
         translated = result.get('translated', '')
-        if getattr(box, '_subtitle_active', False):
+        if getattr(box, '_subtitle_active', False) and translated:
             box.show_subtitle(translated)
 
         if box.mode == 'temp':
@@ -342,7 +342,8 @@ class CoreController(QObject):
                 # 多框模式：各框显示各自的译文
                 result = self._multi_results.get(box.box_id)
                 t = result.get('translated', '') if result else text
-                box.show_subtitle(t)
+                if t:
+                    box.show_subtitle(t)
 
     def _cleanup_worker(self, worker):
         if worker in self._workers:

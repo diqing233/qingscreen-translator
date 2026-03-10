@@ -231,6 +231,10 @@ class TranslationBox(QWidget):
     def showEvent(self, event):
         super().showEvent(event)
         if self._subtitle_active and self._subtitle_win is not None:
+            x, y, w = self._subtitle_geometry()
+            self._subtitle_win.setFixedWidth(w)
+            self._subtitle_win.adjustSize()
+            self._subtitle_win.move(x, y)
             self._subtitle_win.show()
 
     def closeEvent(self, event):
