@@ -19,6 +19,7 @@ class TranslationBox(QWidget):
         self.mode = self.MODE_TEMP
         self._drag_pos = QPoint()
         self._ocr_text = ''
+        self._overlay_label = None
 
         self._auto_timer = QTimer(self)
         self._auto_timer.timeout.connect(lambda: self.translate_requested.emit(self))
@@ -110,6 +111,32 @@ class TranslationBox(QWidget):
     def stop_auto_translate(self):
         self._auto_timer.stop()
 
+    def show_translation_overlay(self, text: str):
+        """在框内用半透明遮罩覆盖原文区域，显示译文。"""
+        if self._overlay_label is None:
+            self._overlay_label = QLabel(self)
+            self._overlay_label.setAlignment(Qt.AlignCenter)
+            self._overlay_label.setWordWrap(True)
+            self._overlay_label.setAttribute(Qt.WA_TransparentForMouseEvents, False)
+            self._overlay_label.setStyleSheet('''
+                QLabel {
+                    background: rgba(15, 15, 20, 210);
+                    color: #f0f0f0;
+                    font-size: 13px;
+                    padding: 8px;
+                    border-radius: 4px;
+                }
+            ''')
+        self._overlay_label.setText(text)
+        self._overlay_label.setGeometry(0, 0, self.width(), self.height())
+        self._overlay_label.raise_()
+        self._overlay_label.show()
+
+    def hide_translation_overlay(self):
+        """隐藏覆盖译文遮罩。"""
+        if self._overlay_label is not None:
+            self._overlay_label.hide()
+
     def _on_dismiss_timeout(self):
         if self.mode == self.MODE_TEMP:
             self.close_requested.emit(self)
@@ -139,3 +166,8 @@ class TranslationBox(QWidget):
             new_pos = event.globalPos() - self._drag_pos
             self.move(new_pos)
             self.region = QRect(new_pos.x(), new_pos.y(), self.width(), self.height())
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if self._overlay_label is not None and self._overlay_label.isVisible():
+            self._overlay_label.setGeometry(0, 0, self.width(), self.height())
