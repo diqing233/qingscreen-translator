@@ -1,5 +1,5 @@
 import logging
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication, QMessageBox, QCheckBox
 from PyQt5.QtCore import QObject, pyqtSignal, QTimer
 
 logger = logging.getLogger(__name__)
@@ -66,11 +66,13 @@ class CoreController(QObject):
         self.result_bar.explain_requested.connect(self._on_explain_requested)
         self.result_bar.history_requested.connect(self._show_history)
         self.result_bar.settings_requested.connect(self._show_settings)
+        self.result_bar.close_requested.connect(self._handle_result_bar_close)
         self.result_bar.box_mode_changed.connect(self._on_box_mode_changed)
         self.result_bar.translate_mode_changed.connect(self._on_translate_mode_changed)
         self.result_bar.target_language_changed.connect(self._on_target_language_changed)
         self.result_bar.source_language_changed.connect(self._on_source_language_changed)
         self.result_bar.overlay_requested.connect(self._on_overlay_requested)
+        self.tray.show_main_requested.connect(self._restore_main_window)
         self.tray.select_triggered.connect(self._sig_start_selection)
         self.tray.settings_triggered.connect(self._show_settings)
         self.tray.history_triggered.connect(self._show_history)
@@ -187,6 +189,77 @@ class CoreController(QObject):
             text = self.result_bar._current_result.get('original', '')
             if text:
                 self._on_explain_requested(text)
+
+    def _handle_result_bar_close(self):
+        behavior = self.settings.get('close_button_behavior', 'ask')
+        remember = False
+        if behavior == 'ask':
+            behavior, remember = self._ask_close_behavior()
+            if behavior is None:
+                return
+            if remember:
+                self.settings.set('close_button_behavior', behavior)
+
+        if behavior == 'tray':
+            self._send_main_window_to_tray()
+        elif behavior == 'quit':
+            self.app.quit()
+
+    def _send_main_window_to_tray(self):
+        if not self._is_tray_available():
+            self._warn_tray_unavailable()
+            self.app.quit()
+            return
+
+        if hasattr(self.result_bar, 'mark_hidden_to_tray'):
+            self.result_bar.mark_hidden_to_tray(True)
+        else:
+            self.result_bar._hidden_to_tray = True
+        self.result_bar.hide()
+
+    def _restore_main_window(self):
+        if hasattr(self.result_bar, 'mark_hidden_to_tray'):
+            self.result_bar.mark_hidden_to_tray(False)
+        else:
+            self.result_bar._hidden_to_tray = False
+        self.result_bar.show()
+        self.result_bar.raise_()
+        self.result_bar.activateWindow()
+
+    def _ask_close_behavior(self):
+        box = QMessageBox(self.result_bar)
+        box.setWindowTitle('关闭程序')
+        box.setText('关闭后要做什么？')
+        box.setInformativeText('之后可以在“设置 -> 通用 -> 关闭按钮行为”里修改')
+        tray_button = box.addButton('放到托盘', QMessageBox.AcceptRole)
+        quit_button = box.addButton('退出程序', QMessageBox.DestructiveRole)
+        cancel_button = box.addButton('取消', QMessageBox.RejectRole)
+        remember_box = QCheckBox('记住我的选择，下次不再询问', box)
+        remember_box.setChecked(True)
+        box.setCheckBox(remember_box)
+        box.setDefaultButton(tray_button)
+        box.exec_()
+
+        clicked = box.clickedButton()
+        if clicked is tray_button:
+            return 'tray', remember_box.isChecked()
+        if clicked is quit_button:
+            return 'quit', remember_box.isChecked()
+        if clicked is cancel_button:
+            return None, False
+        return None, False
+
+    def _is_tray_available(self):
+        from PyQt5.QtWidgets import QSystemTrayIcon
+
+        return QSystemTrayIcon.isSystemTrayAvailable()
+
+    def _warn_tray_unavailable(self):
+        QMessageBox.warning(
+            self.result_bar,
+            '系统托盘不可用',
+            '当前系统托盘不可用，将直接退出程序。'
+        )
 
     def _toggle_boxes(self):
         self.box_manager.toggle_all_visibility()

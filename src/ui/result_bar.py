@@ -148,6 +148,7 @@ class ResultBar(QWidget):
     explain_requested         = pyqtSignal(str)
     history_requested         = pyqtSignal()
     settings_requested        = pyqtSignal()
+    close_requested           = pyqtSignal()
     overlay_requested         = pyqtSignal(str)   # carries current translated text
     box_mode_changed          = pyqtSignal(str)   # 'temp'|'fixed'|'multi'|'ai'
     translate_mode_changed    = pyqtSignal(str)   # 'manual'|'auto'
@@ -164,6 +165,7 @@ class ResultBar(QWidget):
         self._box_mode = 'temp'
         self._overlay_active = False
         self._translate_mode = 'manual'
+        self._hidden_to_tray = False
         self._manual_size = False   # True once user manually resizes
         self._in_adjust = False     # True while adjustSize() is running
         self._resizing = False      # True while dragging bottom-right to resize
@@ -332,7 +334,7 @@ class ResultBar(QWidget):
         self._btn_history  = self._icon_btn('🕐', '翻译历史 (History)', self.history_requested.emit)
         self._btn_settings = self._icon_btn('⚙',  '设置 (Settings)',   self.settings_requested.emit)
         self._btn_minimize = self._icon_btn('─',  '最小化/展开',        self._toggle_minimize)
-        self._btn_close    = self._icon_btn('✕',  '隐藏结果条',         self.hide)
+        self._btn_close    = self._icon_btn('✕',  '关闭主窗口',         self.close_requested.emit)
         for b in [self._btn_overlay, self._btn_history, self._btn_settings, self._btn_minimize, self._btn_close]:
             tb.addWidget(b)
 
@@ -634,6 +636,9 @@ class ResultBar(QWidget):
             self._manual_size = True
         self._position_window()
 
+    def mark_hidden_to_tray(self, hidden: bool):
+        self._hidden_to_tray = hidden
+
     def update_mode_tooltips(self, hk_temp: str, hk_fixed: str, hk_multi: str, hk_ai: str = 'alt+4'):
         hints = {
             'temp':  f'临时翻译：框选后立即翻译，N秒后消失  [{hk_temp}]',
@@ -664,7 +669,7 @@ class ResultBar(QWidget):
                               if c == src.lower() or c == src.lower().split('-')[0]), src.upper())
             self._btn_src_lang.setText(f'{src_short} ▾')
 
-        if not self.isVisible():
+        if not self.isVisible() and not self._hidden_to_tray:
             self.show()
         self._smart_adjust()
 
@@ -682,7 +687,7 @@ class ResultBar(QWidget):
             parts.append(f'[{i}] {trans}  \u3000{backend}')
         self._lbl_translation.setPlainText('\n─────\n'.join(parts))
         self._lbl_backend.setText('')
-        if not self.isVisible():
+        if not self.isVisible() and not self._hidden_to_tray:
             self.show()
         self._smart_adjust()
 
@@ -702,12 +707,12 @@ class ResultBar(QWidget):
     def show_loading(self, msg: str = '翻译中...'):
         self._lbl_translation.setPlainText(msg)
         self._lbl_backend.setText('')
-        if not self.isVisible():
+        if not self.isVisible() and not self._hidden_to_tray:
             self.show()
 
     def show_error(self, msg: str):
         self._lbl_translation.setPlainText(f'⚠ {msg}')
-        if not self.isVisible():
+        if not self.isVisible() and not self._hidden_to_tray:
             self.show()
 
     # ── private slots ─────────────────────────────────────────────

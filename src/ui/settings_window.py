@@ -70,6 +70,12 @@ class SettingsWindow(QDialog):
         self._combo_size.addItem('上次大小', 'last')
         form.addRow('结果条大小', self._combo_size)
 
+        self._combo_close_behavior = QComboBox()
+        self._combo_close_behavior.addItem('每次询问', 'ask')
+        self._combo_close_behavior.addItem('最小化到托盘', 'tray')
+        self._combo_close_behavior.addItem('直接退出程序', 'quit')
+        form.addRow('关闭按钮行为', self._combo_close_behavior)
+
         self._edit_hotkey_select = QLineEdit()
         self._edit_hotkey_select.setPlaceholderText('如：alt+q')
         form.addRow('框选热键', self._edit_hotkey_select)
@@ -234,6 +240,11 @@ class SettingsWindow(QDialog):
         if idx >= 0:
             self._combo_size.setCurrentIndex(idx)
 
+        close_behavior = self.settings.get('close_button_behavior', 'ask')
+        idx = self._combo_close_behavior.findData(close_behavior)
+        if idx >= 0:
+            self._combo_close_behavior.setCurrentIndex(idx)
+
         self._edit_hotkey_select.setText(self.settings.get('hotkey_select', 'alt+q'))
         self._edit_hotkey_explain.setText(self.settings.get('hotkey_explain', 'alt+e'))
         self._edit_hotkey_toggle.setText(self.settings.get('hotkey_toggle_boxes', 'alt+w'))
@@ -271,6 +282,7 @@ class SettingsWindow(QDialog):
         self.settings.set('target_language', self._combo_target.currentData())
         self.settings.set('result_bar_position', self._combo_pos.currentData())
         self.settings.set('result_bar_size', self._combo_size.currentData())
+        self.settings.set('close_button_behavior', self._combo_close_behavior.currentData())
         self.settings.set('hotkey_select', self._edit_hotkey_select.text())
         self.settings.set('hotkey_explain', self._edit_hotkey_explain.text())
         self.settings.set('hotkey_toggle_boxes', self._edit_hotkey_toggle.text())
@@ -310,6 +322,9 @@ class SettingsWindow(QDialog):
         idx = self._combo_size.findData(DEFAULTS['result_bar_size'])
         if idx >= 0:
             self._combo_size.setCurrentIndex(idx)
+        idx = self._combo_close_behavior.findData(DEFAULTS['close_button_behavior'])
+        if idx >= 0:
+            self._combo_close_behavior.setCurrentIndex(idx)
         self._edit_hotkey_select.setText(DEFAULTS['hotkey_select'])
         self._edit_hotkey_explain.setText(DEFAULTS['hotkey_explain'])
         self._edit_hotkey_toggle.setText(DEFAULTS['hotkey_toggle_boxes'])

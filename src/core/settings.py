@@ -17,6 +17,7 @@ DEFAULTS = {
     'result_bar_opacity': 0.85,
     'result_bar_position': 'right',
     'result_bar_size': 'default',
+    'close_button_behavior': 'ask',
     'translation_order': ['dictionary', 'google', 'baidu', 'deepl', 'zhipu', 'siliconflow', 'moonshot', 'deepseek', 'openai', 'claude'],
     'enabled_backends': ['google', 'zhipu'],
     'api_keys': {

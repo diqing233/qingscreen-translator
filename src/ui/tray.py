@@ -1,9 +1,10 @@
-from PyQt5.QtWidgets import QSystemTrayIcon, QMenu, QAction
-from PyQt5.QtGui import QIcon, QPixmap, QColor
 from PyQt5.QtCore import pyqtSignal
+from PyQt5.QtGui import QColor, QIcon, QPixmap
+from PyQt5.QtWidgets import QAction, QMenu, QSystemTrayIcon
 
 
 class SystemTray(QSystemTrayIcon):
+    show_main_requested = pyqtSignal()
     select_triggered = pyqtSignal()
     settings_triggered = pyqtSignal()
     history_triggered = pyqtSignal()
@@ -24,23 +25,24 @@ class SystemTray(QSystemTrayIcon):
     def _build_menu(self):
         menu = QMenu()
         actions = [
-            ('📷 框选翻译  Alt+Q', self.select_triggered),
+            ('显示主窗口', self.show_main_requested),
+            ('框选翻译  Alt+Q', self.select_triggered),
             None,
-            ('🕐 翻译历史', self.history_triggered),
-            ('⚙ 设置', self.settings_triggered),
+            ('翻译历史', self.history_triggered),
+            ('设置', self.settings_triggered),
             None,
             ('退出', self.quit_triggered),
         ]
         for item in actions:
             if item is None:
                 menu.addSeparator()
-            else:
-                label, sig = item
-                act = QAction(label, menu)
-                act.triggered.connect(sig.emit)
-                menu.addAction(act)
+                continue
+            label, signal = item
+            action = QAction(label, menu)
+            action.triggered.connect(signal.emit)
+            menu.addAction(action)
         self.setContextMenu(menu)
 
     def _on_activated(self, reason):
-        if reason == QSystemTrayIcon.DoubleClick:
-            self.select_triggered.emit()
+        if reason in (QSystemTrayIcon.Trigger, QSystemTrayIcon.DoubleClick):
+            self.show_main_requested.emit()

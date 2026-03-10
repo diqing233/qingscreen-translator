@@ -33,3 +33,15 @@ def test_api_key():
     store = make_store()
     store.set_api_key('deepseek_key', 'sk-test123')
     assert store.get_api_key('deepseek_key') == 'sk-test123'
+
+def test_default_close_button_behavior_is_ask():
+    store = make_store()
+    assert store.get('close_button_behavior') == 'ask'
+
+def test_close_button_behavior_persists():
+    f = tempfile.NamedTemporaryFile(suffix='.json', delete=False)
+    f.close()
+    store = SettingsStore(f.name)
+    store.set('close_button_behavior', 'tray')
+    store2 = SettingsStore(f.name)
+    assert store2.get('close_button_behavior') == 'tray'
