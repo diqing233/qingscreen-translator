@@ -305,7 +305,6 @@ class CoreController(QObject):
         if box.mode == 'temp':
             box.start_dismiss_timer()
         elif getattr(box, '_pending_auto', False):
-            # 以下两行保留自原有实现，不作修改
             box._pending_auto = False
             box.start_auto_translate()
 
