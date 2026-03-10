@@ -76,7 +76,7 @@ class SettingsWindow(QDialog):
 
         self._edit_hotkey_explain = QLineEdit()
         self._edit_hotkey_explain.setPlaceholderText('如：alt+e')
-        form.addRow('AI解释热键', self._edit_hotkey_explain)
+        form.addRow('AI科普热键', self._edit_hotkey_explain)
 
         self._edit_hotkey_toggle = QLineEdit()
         self._edit_hotkey_toggle.setPlaceholderText('如：alt+w')
@@ -93,6 +93,10 @@ class SettingsWindow(QDialog):
         self._edit_hotkey_mode_multi = QLineEdit()
         self._edit_hotkey_mode_multi.setPlaceholderText('如：alt+3')
         form.addRow('切换多框模式热键', self._edit_hotkey_mode_multi)
+
+        self._edit_hotkey_mode_ai = QLineEdit()
+        self._edit_hotkey_mode_ai.setPlaceholderText('如：alt+4')
+        form.addRow('切换AI框选热键', self._edit_hotkey_mode_ai)
 
         tabs.addTab(gen, '通用')
 
@@ -236,6 +240,7 @@ class SettingsWindow(QDialog):
         self._edit_hotkey_mode_temp.setText(self.settings.get('hotkey_mode_temp', 'alt+1'))
         self._edit_hotkey_mode_fixed.setText(self.settings.get('hotkey_mode_fixed', 'alt+2'))
         self._edit_hotkey_mode_multi.setText(self.settings.get('hotkey_mode_multi', 'alt+3'))
+        self._edit_hotkey_mode_ai.setText(self.settings.get('hotkey_mode_ai', 'alt+4'))
 
         saved_order = self.settings.get('translation_order', list(BACKEND_LABELS.keys()))
         # 过滤掉已删除的后端（如旧版 settings.json 残留的条目）
@@ -272,6 +277,7 @@ class SettingsWindow(QDialog):
         self.settings.set('hotkey_mode_temp', self._edit_hotkey_mode_temp.text())
         self.settings.set('hotkey_mode_fixed', self._edit_hotkey_mode_fixed.text())
         self.settings.set('hotkey_mode_multi', self._edit_hotkey_mode_multi.text())
+        self.settings.set('hotkey_mode_ai', self._edit_hotkey_mode_ai.text())
 
         order, enabled = [], []
         for i in range(self._list_backends.count()):
@@ -310,6 +316,7 @@ class SettingsWindow(QDialog):
         self._edit_hotkey_mode_temp.setText(DEFAULTS['hotkey_mode_temp'])
         self._edit_hotkey_mode_fixed.setText(DEFAULTS['hotkey_mode_fixed'])
         self._edit_hotkey_mode_multi.setText(DEFAULTS['hotkey_mode_multi'])
+        self._edit_hotkey_mode_ai.setText(DEFAULTS['hotkey_mode_ai'])
 
     def _sync_dict_group_visibility(self):
         """根据"本地词典"是否勾选来显示/隐藏 ECDICT 分组框。"""
