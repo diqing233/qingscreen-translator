@@ -244,13 +244,19 @@ class TranslationWorker(QThread):
 
     def run(self):
         try:
+            if self.isInterruptionRequested():
+                return
             result = self.router.translate(
                 self.text, target_lang=self.target_lang, source_lang=self.source_lang)
+            if self.isInterruptionRequested():
+                return
             if result:
                 self.result_ready.emit(result)
             else:
                 self.error_occurred.emit('所有翻译后端均失败或未启用')
         except Exception as e:
+            if self.isInterruptionRequested():
+                return
             logger.exception('Translation failed')
             self.error_occurred.emit(str(e))
 

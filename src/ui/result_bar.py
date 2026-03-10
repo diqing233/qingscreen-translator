@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 # ── 数据常量 ─────────────────────────────────────────────────────
 
-DEFAULT_W, DEFAULT_H = 620, 140
+DEFAULT_W, DEFAULT_H = 760, 140
 
 BOX_MODES = [
     ('temp',  '临时', '临时翻译：框选后立即翻译，N秒后自动消失'),
@@ -145,6 +145,7 @@ class TranslateToggle(QWidget):
 
 class ResultBar(QWidget):
     start_selection_requested = pyqtSignal()
+    stop_clear_requested      = pyqtSignal()
     explain_requested         = pyqtSignal(str)
     history_requested         = pyqtSignal()
     settings_requested        = pyqtSignal()
@@ -164,6 +165,7 @@ class ResultBar(QWidget):
         self._drag_pos = QPoint()
         self._box_mode = 'temp'
         self._overlay_active = False
+        self._translation_busy = False
         self._translate_mode = 'manual'
         self._hidden_to_tray = False
         self._manual_size = False   # True once user manually resizes
@@ -264,6 +266,12 @@ class ResultBar(QWidget):
         ''')
         self._btn_play.clicked.connect(self.start_selection_requested.emit)
         tb.addWidget(self._btn_play)
+        tb.addSpacing(4)
+
+        self._btn_stop_clear = QPushButton('■')
+        self._btn_stop_clear.setFixedSize(22, 22)
+        self._btn_stop_clear.clicked.connect(self.stop_clear_requested.emit)
+        tb.addWidget(self._btn_stop_clear)
         tb.addSpacing(4)
 
         # ↺ 恢复默认大小按钮
@@ -367,6 +375,7 @@ class ResultBar(QWidget):
         for b in [self._btn_history, self._btn_settings, self._btn_minimize, self._btn_close]:
             _tb_row.addWidget(b)
         cl.addLayout(_tb_row)
+        self.set_stop_clear_busy(False)
         self._refresh_toolbar_layout()
         self._set_active_mode_btn('temp')
 
@@ -558,10 +567,49 @@ class ResultBar(QWidget):
             min_width = max(btn.sizeHint().width(), btn.fontMetrics().horizontalAdvance(btn.text()) + 20)
             btn.setMinimumWidth(min_width)
 
+    def _stop_clear_btn_style(self, busy: bool) -> str:
+        if busy:
+            return '''
+                QPushButton {
+                    background: rgba(180,80,50,190); color: white;
+                    border: 1px solid rgba(255,170,120,120);
+                    border-radius: 4px; font-size: 11px; font-weight: bold;
+                }
+                QPushButton:hover { background: rgba(210,95,60,220); }
+            '''
+        return '''
+            QPushButton {
+                background: rgba(50,50,65,180); color: rgba(200,200,210,220);
+                border: 1px solid rgba(255,255,255,15);
+                border-radius: 4px; font-size: 11px; font-weight: bold;
+            }
+            QPushButton:hover { background: rgba(70,70,95,220); color: white; }
+        '''
+
     def _refresh_toolbar_layout(self):
         self._update_lang_button_widths()
         self._tb_widget.adjustSize()
         self._tb_widget.setFixedSize(self._tb_widget.sizeHint())
+
+    def set_stop_clear_busy(self, busy: bool):
+        self._translation_busy = busy
+        tooltip = '终止当前翻译' if busy else '清空当前翻译内容'
+        self._btn_stop_clear.setToolTip(tooltip)
+        self._btn_stop_clear.setStyleSheet(self._stop_clear_btn_style(busy))
+
+    def clear_current_content(self):
+        self._current_result = None
+        self._source_expanded = False
+        self._lbl_translation.setPlainText('等待翻译...')
+        self._lbl_backend.setText('')
+        self._lbl_source.clear()
+        self._lbl_source.setVisible(False)
+        self._btn_source.setText('原文 ▼')
+        self._lbl_explain_loading.setVisible(False)
+        self._lbl_explain.clear()
+        self._lbl_explain.setVisible(False)
+        self._btn_explain_hdr.setVisible(False)
+        self._smart_adjust()
 
     # ── 语言下拉菜单 ──────────────────────────────────────────────
 

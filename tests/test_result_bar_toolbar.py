@@ -41,6 +41,14 @@ def test_toggle_is_placed_after_overlay_button():
     assert layout.indexOf(bar._toggle) > layout.indexOf(bar._btn_overlay)
 
 
+def test_stop_clear_button_is_placed_after_play_button():
+    bar = _make_bar()
+    layout = bar._tb_scroll.widget().layout()
+
+    assert layout.indexOf(bar._btn_stop_clear) > layout.indexOf(bar._btn_play)
+    assert layout.indexOf(bar._btn_stop_clear) < layout.indexOf(bar._btn_reset_size)
+
+
 def test_toolbar_width_refreshes_when_toggle_becomes_visible():
     bar = _make_bar()
     content = bar._tb_scroll.widget()
@@ -50,6 +58,15 @@ def test_toolbar_width_refreshes_when_toggle_becomes_visible():
     _app.processEvents()
 
     assert content.geometry().width() > initial_width
+
+
+def test_default_width_fits_toolbar_in_fixed_mode():
+    bar = _make_bar()
+
+    bar._on_mode_btn_click('fixed')
+    _app.processEvents()
+
+    assert bar._tb_scroll.viewport().width() >= bar._tb_scroll.widget().width()
 
 
 def test_language_buttons_reserve_enough_width_for_labels():

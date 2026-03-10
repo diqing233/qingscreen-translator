@@ -28,6 +28,9 @@ class CoreController(QObject):
         super().__init__()
         self.app = app
         self._workers = []
+        self._active_translation_workers = {}
+        self._cancelled_translation_jobs = set()
+        self._translation_job_seq = 0
         self._box_mode = 'temp'
         self._translate_mode = 'manual'
         self._multi_results: dict  = {}   # box_id → result dict（多框模式）
@@ -63,6 +66,7 @@ class CoreController(QObject):
         self.box_manager.translate_box.connect(self._on_translate_box)
         self.box_manager.box_removed.connect(self._on_box_removed)
         self.result_bar.start_selection_requested.connect(self._start_selection)
+        self.result_bar.stop_clear_requested.connect(self._on_stop_clear_requested)
         self.result_bar.explain_requested.connect(self._on_explain_requested)
         self.result_bar.history_requested.connect(self._show_history)
         self.result_bar.settings_requested.connect(self._show_settings)
@@ -345,14 +349,21 @@ class CoreController(QObject):
         from ocr.ocr_worker import TranslationWorker
         target = self.settings.get('target_language', 'zh-CN')
         source = self.settings.get('source_language', 'auto')
+        self._translation_job_seq += 1
+        job_id = self._translation_job_seq
         worker = TranslationWorker(text, self.router, target_lang=target, source_lang=source)
-        worker.result_ready.connect(lambda r: self._on_translate_done(r, box))
-        worker.error_occurred.connect(self.result_bar.show_error)
-        worker.finished.connect(lambda: self._cleanup_worker(worker))
+        worker._translation_job_id = job_id
+        self._active_translation_workers[job_id] = worker
+        self.result_bar.set_stop_clear_busy(True)
+        worker.result_ready.connect(lambda r, w=worker: self._on_translate_done(r, box, w))
+        worker.error_occurred.connect(lambda msg, w=worker: self._on_translate_error(msg, w))
+        worker.finished.connect(lambda w=worker: self._on_translate_finished(w))
         self._workers.append(worker)
         worker.start()
 
-    def _on_translate_done(self, result: dict, box):
+    def _on_translate_done(self, result: dict, box, worker=None):
+        if self._is_translation_cancelled(worker):
+            return
         try:
             self.history.add(
                 result.get('original', ''),
@@ -380,6 +391,36 @@ class CoreController(QObject):
         elif getattr(box, '_pending_auto', False):
             box._pending_auto = False
             box.start_auto_translate()
+
+    def _on_translate_error(self, msg: str, worker=None):
+        if self._is_translation_cancelled(worker):
+            return
+        self.result_bar.show_error(msg)
+
+    def _on_translate_finished(self, worker):
+        job_id = getattr(worker, '_translation_job_id', None)
+        if job_id is not None:
+            self._active_translation_workers.pop(job_id, None)
+            self._cancelled_translation_jobs.discard(job_id)
+        self._cleanup_worker(worker)
+        if not self._active_translation_workers:
+            self.result_bar.set_stop_clear_busy(False)
+
+    def _is_translation_cancelled(self, worker) -> bool:
+        if worker is None:
+            return False
+        job_id = getattr(worker, '_translation_job_id', None)
+        return bool(job_id in self._cancelled_translation_jobs or worker.isInterruptionRequested())
+
+    def _on_stop_clear_requested(self):
+        if self._active_translation_workers:
+            for job_id, worker in list(self._active_translation_workers.items()):
+                self._cancelled_translation_jobs.add(job_id)
+                worker.requestInterruption()
+            self.result_bar.clear_current_content()
+            self.result_bar.set_stop_clear_busy(False)
+            return
+        self.result_bar.clear_current_content()
 
     def _on_box_removed(self, box_id: int):
         """框被关闭时清理相关状态，多框模式刷新显示"""
