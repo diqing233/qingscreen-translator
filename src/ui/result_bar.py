@@ -1,7 +1,8 @@
 import logging
 from PyQt5.QtWidgets import (QWidget, QMainWindow, QLabel, QPushButton,
                               QHBoxLayout, QVBoxLayout, QApplication,
-                              QSizePolicy, QMenu, QAction, QTextEdit)
+                              QSizePolicy, QMenu, QAction, QTextEdit,
+                              QScrollArea, QFrame)
 from PyQt5.QtCore import Qt, QPoint, QSize, pyqtSignal, QTimer, QEvent
 from PyQt5.QtGui import QFont, QPainter, QColor, QIcon, QPixmap
 
@@ -239,9 +240,12 @@ class ResultBar(QWidget):
         cl.setSpacing(4)
         self._apply_opacity()
 
-        # ── 工具栏 ────────────────────────────────────────────────
-        tb = QHBoxLayout()
+        # ── 工具栏（可横向滚动）──────────────────────────────────
+        _tb_widget = QWidget()
+        _tb_widget.setStyleSheet('background: transparent;')
+        tb = QHBoxLayout(_tb_widget)
         tb.setSpacing(4)
+        tb.setContentsMargins(0, 0, 0, 0)
 
         # ▶ 播放按钮（等同 Alt+Q 框选）
         self._btn_play = QPushButton('▶')
@@ -332,7 +336,26 @@ class ResultBar(QWidget):
         for b in [self._btn_overlay, self._btn_history, self._btn_settings, self._btn_minimize, self._btn_close]:
             tb.addWidget(b)
 
-        cl.addLayout(tb)
+        _tb_widget.adjustSize()
+        self._tb_scroll = QScrollArea()
+        self._tb_scroll.setWidget(_tb_widget)
+        self._tb_scroll.setWidgetResizable(False)
+        self._tb_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self._tb_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._tb_scroll.setFrameShape(QFrame.NoFrame)
+        self._tb_scroll.setFixedHeight(32)
+        self._tb_scroll.setStyleSheet('''
+            QScrollArea { background: transparent; border: none; }
+            QScrollBar:horizontal {
+                background: rgba(255,255,255,8); height: 4px; border-radius: 2px;
+                margin: 0;
+            }
+            QScrollBar::handle:horizontal {
+                background: rgba(255,255,255,50); border-radius: 2px; min-width: 20px;
+            }
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
+        ''')
+        cl.addWidget(self._tb_scroll)
         self._set_active_mode_btn('temp')
 
         # 分隔线
