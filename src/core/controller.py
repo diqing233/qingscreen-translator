@@ -22,6 +22,7 @@ class CoreController(QObject):
     _sig_mode_temp       = pyqtSignal()
     _sig_mode_fixed      = pyqtSignal()
     _sig_mode_multi      = pyqtSignal()
+    _sig_mode_ai         = pyqtSignal()
 
     def __init__(self, app: QApplication):
         super().__init__()
@@ -43,6 +44,7 @@ class CoreController(QObject):
         self._sig_mode_temp.connect(lambda: self._activate_mode('temp'))
         self._sig_mode_fixed.connect(lambda: self._activate_mode('fixed'))
         self._sig_mode_multi.connect(lambda: self._activate_mode('multi'))
+        self._sig_mode_ai.connect(lambda: self._activate_mode('ai'))
 
     def start(self):
         from translation.router import TranslationRouter
@@ -68,6 +70,7 @@ class CoreController(QObject):
         self.result_bar.translate_mode_changed.connect(self._on_translate_mode_changed)
         self.result_bar.target_language_changed.connect(self._on_target_language_changed)
         self.result_bar.source_language_changed.connect(self._on_source_language_changed)
+        self.result_bar.overlay_requested.connect(self._on_overlay_requested)
         self.tray.select_triggered.connect(self._sig_start_selection)
         self.tray.settings_triggered.connect(self._show_settings)
         self.tray.history_triggered.connect(self._show_history)
@@ -92,6 +95,7 @@ class CoreController(QObject):
             def on_mode1():    self._sig_mode_temp.emit()
             def on_mode2():    self._sig_mode_fixed.emit()
             def on_mode3():    self._sig_mode_multi.emit()
+            def on_mode4():    self._sig_mode_ai.emit()
 
             core_map = {
                 _fmt_hotkey(self.settings.get('hotkey_select',       'alt+q')): on_select,
@@ -103,6 +107,7 @@ class CoreController(QObject):
                 core_map[_fmt_hotkey(self.settings.get('hotkey_mode_temp',  'alt+1'))] = on_mode1
                 core_map[_fmt_hotkey(self.settings.get('hotkey_mode_fixed', 'alt+2'))] = on_mode2
                 core_map[_fmt_hotkey(self.settings.get('hotkey_mode_multi', 'alt+3'))] = on_mode3
+                core_map[_fmt_hotkey(self.settings.get('hotkey_mode_ai',    'alt+4'))] = on_mode4
             except Exception as e:
                 logger.warning(f'模式切换热键格式错误（已忽略）: {e}')
 
@@ -139,6 +144,7 @@ class CoreController(QObject):
                 self.settings.get('hotkey_mode_temp',  'alt+1'),
                 self.settings.get('hotkey_mode_fixed', 'alt+2'),
                 self.settings.get('hotkey_mode_multi', 'alt+3'),
+                self.settings.get('hotkey_mode_ai',    'alt+4'),
             )
 
     def _activate_mode(self, mode: str):
@@ -209,13 +215,23 @@ class CoreController(QObject):
         # 保存初始哈希，供后续自动翻译变化检测使用
         if worker is not None and worker.img_hash is not None:
             self._box_img_hashes[box.box_id] = worker.img_hash
-        if self._box_mode == 'temp':
+        if self._box_mode in ('temp', 'ai'):
             box.set_mode('temp')
         else:
             box.set_mode('fixed')
             if self._translate_mode == 'auto':
                 box._pending_auto = True
-        self._on_ocr_done(text, box)
+        if self._box_mode == 'ai':
+            box.set_mode('temp')   # AI框选框 临时消失
+            if text.strip():
+                box.set_ocr_text(text)
+                box.start_dismiss_timer()
+                self._on_explain_requested(text)
+            else:
+                self.result_bar.show_error('未识别到文字，请重新框选')
+                box.start_dismiss_timer()
+        else:
+            self._on_ocr_done(text, box)
 
     def _run_ocr(self, box):
         """用于固定框自动重翻：带画面变化检测，无变化则跳过"""
@@ -304,6 +320,25 @@ class CoreController(QObject):
         worker.finished.connect(lambda: self._cleanup_worker(worker))
         self._workers.append(worker)
         worker.start()
+
+    def _on_overlay_requested(self, text: str):
+        """切换所有翻译框的译文覆盖遮罩。"""
+        boxes = list(self.box_manager._boxes.values())
+        if not boxes:
+            return
+        any_overlay = any(
+            getattr(b, '_overlay_label', None) is not None
+            and b._overlay_label.isVisible()
+            for b in boxes
+        )
+        for box in boxes:
+            if any_overlay:
+                box.hide_translation_overlay()
+            else:
+                # 多框模式：各框显示各自的译文
+                result = self._multi_results.get(box.box_id)
+                t = result.get('translated', '') if result else text
+                box.show_translation_overlay(t)
 
     def _cleanup_worker(self, worker):
         if worker in self._workers:
