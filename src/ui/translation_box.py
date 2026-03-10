@@ -116,7 +116,6 @@ class TranslationBox(QWidget):
         self._auto_timer.stop()
 
     def _create_subtitle_win(self):
-        from PyQt5.QtWidgets import QLabel
         win = QLabel()
         win.setWindowFlags(
             Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
@@ -177,7 +176,7 @@ class TranslationBox(QWidget):
     def _on_toggle_subtitle(self):
         if self._subtitle_active:
             self.hide_subtitle()
-        else:
+        elif self._last_translation:
             self.show_subtitle(self._last_translation)
 
     def _on_dismiss_timeout(self):
