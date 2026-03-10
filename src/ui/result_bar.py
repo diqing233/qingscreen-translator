@@ -15,6 +15,7 @@ BOX_MODES = [
     ('temp',  '临时', '临时翻译：框选后立即翻译，N秒后自动消失'),
     ('fixed', '固定', '固定翻译：框保留在屏幕上，可手动或自动翻译'),
     ('multi', '多框', '多框翻译：可在屏幕上放置多个独立翻译框'),
+    ('ai',    'AI框', 'AI框选：框选后直接AI科普，无需翻译'),
 ]
 
 SOURCE_LANGS = [
@@ -146,7 +147,8 @@ class ResultBar(QWidget):
     explain_requested         = pyqtSignal(str)
     history_requested         = pyqtSignal()
     settings_requested        = pyqtSignal()
-    box_mode_changed          = pyqtSignal(str)   # 'temp'|'fixed'|'multi'
+    overlay_requested         = pyqtSignal(str)   # carries current translated text
+    box_mode_changed          = pyqtSignal(str)   # 'temp'|'fixed'|'multi'|'ai'
     translate_mode_changed    = pyqtSignal(str)   # 'manual'|'auto'
     target_language_changed   = pyqtSignal(str)
     source_language_changed   = pyqtSignal(str)
@@ -159,6 +161,7 @@ class ResultBar(QWidget):
         self._minimized = False
         self._drag_pos = QPoint()
         self._box_mode = 'temp'
+        self._overlay_active = False
         self._translate_mode = 'manual'
         self._manual_size = False   # True once user manually resizes
         self._in_adjust = False     # True while adjustSize() is running
@@ -256,6 +259,22 @@ class ResultBar(QWidget):
         tb.addWidget(self._btn_play)
         tb.addSpacing(4)
 
+        # ↺ 恢复默认大小按钮
+        self._btn_reset_size = QPushButton('↺')
+        self._btn_reset_size.setToolTip('恢复结果条默认大小')
+        self._btn_reset_size.setFixedSize(22, 22)
+        self._btn_reset_size.setStyleSheet('''
+            QPushButton {
+                background: rgba(50,50,65,180); color: rgba(160,160,185,215);
+                border: 1px solid rgba(255,255,255,15);
+                border-radius: 4px; font-size: 12px;
+            }
+            QPushButton:hover { background: rgba(70,70,95,220); color: white; }
+        ''')
+        self._btn_reset_size.clicked.connect(self._reset_size)
+        tb.addWidget(self._btn_reset_size)
+        tb.addSpacing(4)
+
         # 左侧模式按钮
         self._mode_btns = {}
         for key, label, tip in BOX_MODES:
@@ -290,11 +309,9 @@ class ResultBar(QWidget):
 
         tb.addSpacing(6)
 
-        # 复制译文 + AI解释（工具栏快捷区）
+        # 复制译文（工具栏快捷区）
         self._btn_copy_trans = self._action_btn('📋', '复制译文到剪贴板', self._copy)
-        self._btn_ai         = self._action_btn('💬 AI', 'AI科普 - 用AI解析当前原文内容', self._on_explain)
         tb.addWidget(self._btn_copy_trans)
-        tb.addWidget(self._btn_ai)
 
         tb.addSpacing(6)
 
@@ -307,11 +324,12 @@ class ResultBar(QWidget):
         tb.addStretch()
 
         # 右侧图标按钮
+        self._btn_overlay  = self._icon_btn('⊞',  '覆盖译文到原文区域',  self._on_overlay)
         self._btn_history  = self._icon_btn('🕐', '翻译历史 (History)', self.history_requested.emit)
         self._btn_settings = self._icon_btn('⚙',  '设置 (Settings)',   self.settings_requested.emit)
         self._btn_minimize = self._icon_btn('─',  '最小化/展开',        self._toggle_minimize)
         self._btn_close    = self._icon_btn('✕',  '隐藏结果条',         self.hide)
-        for b in [self._btn_history, self._btn_settings, self._btn_minimize, self._btn_close]:
+        for b in [self._btn_overlay, self._btn_history, self._btn_settings, self._btn_minimize, self._btn_close]:
             tb.addWidget(b)
 
         cl.addLayout(tb)
@@ -369,6 +387,8 @@ class ResultBar(QWidget):
         self._resize_hint_lbl.setToolTip('拖拽此处（右下角 20px 范围）调整窗口大小')
         ar.addWidget(self._btn_source)
         ar.addWidget(self._btn_copy_src)
+        self._btn_ai = self._action_btn('💬 AI科普', '科普当前原文内容（同 Alt+E）', self._on_explain)
+        ar.addWidget(self._btn_ai)
         ar.addStretch()
         ar.addWidget(self._lbl_backend)
         ar.addSpacing(8)
@@ -591,14 +611,15 @@ class ResultBar(QWidget):
             self._manual_size = True
         self._position_window()
 
-    def update_mode_tooltips(self, hk_temp: str, hk_fixed: str, hk_multi: str):
+    def update_mode_tooltips(self, hk_temp: str, hk_fixed: str, hk_multi: str, hk_ai: str = 'alt+4'):
         hints = {
             'temp':  f'临时翻译：框选后立即翻译，N秒后消失  [{hk_temp}]',
             'fixed': f'固定翻译：框保留，可手动或自动翻译  [{hk_fixed}]',
             'multi': f'多框翻译：可放置多个翻译框  [{hk_multi}]',
+            'ai':    f'AI框选：框选后直接AI科普，无需翻译  [{hk_ai}]',
         }
         for key, btn in self._mode_btns.items():
-            btn.setToolTip(hints[key])
+            btn.setToolTip(hints.get(key, ''))
 
     def show_result(self, result: dict):
         self._current_result = result
@@ -687,6 +708,31 @@ class ResultBar(QWidget):
     def _copy_source(self):
         if self._current_result:
             QApplication.clipboard().setText(self._current_result.get('original', ''))
+
+    def _reset_size(self):
+        self._manual_size = False
+        self.resize(DEFAULT_W, DEFAULT_H)
+        self._manual_size = True
+
+    def _on_overlay(self):
+        text = ''
+        if self._current_result:
+            text = self._current_result.get('translated', '')
+        self._overlay_active = not self._overlay_active
+        if self._overlay_active:
+            self._btn_overlay.setStyleSheet('''
+                QPushButton { background: rgba(80,140,255,180); color: white;
+                              border: none; font-size: 12px; border-radius: 3px; }
+                QPushButton:hover { color: white; background: rgba(100,160,255,200); }
+            ''')
+        else:
+            self._btn_overlay.setStyleSheet('''
+                QPushButton { background: transparent; color: rgba(160,160,180,200);
+                              border: none; font-size: 12px; }
+                QPushButton:hover { color: white; background: rgba(255,255,255,15);
+                                    border-radius: 3px; }
+            ''')
+        self.overlay_requested.emit(text)
 
     def _on_explain(self):
         if self._current_result is None:
