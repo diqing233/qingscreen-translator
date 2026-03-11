@@ -38,6 +38,16 @@ def _make_bar():
     return bar
 
 
+def _result(original='hello world', translated='你好，世界'):
+    return {
+        'original': original,
+        'translated': translated,
+        'source_lang': 'en',
+        'target_lang': 'zh-CN',
+        'backend': 'test',
+    }
+
+
 def test_toggle_is_placed_after_copy_button():
     bar = _make_bar()
     layout = bar._tb_scroll.widget().layout()
@@ -118,3 +128,90 @@ def test_box_mode_cycle_button_rotates_modes():
     assert bar._box_mode == 'fixed'
     assert bar._toggle.isVisible()
     assert bar._btn_box_mode_cycle.text() == BOX_MODE_META['fixed'][0]
+
+
+def test_source_panel_expands_downward_without_moving_top_edge():
+    bar = _make_bar()
+    bar.show_result(_result())
+    _app.processEvents()
+    original_y = bar.y()
+    original_height = bar.height()
+
+    bar._toggle_source()
+    _app.processEvents()
+
+    assert bar.y() == original_y
+    assert bar.height() > original_height
+    assert bar._source_editor.isVisible()
+    assert bar._btn_retranslate.isEnabled()
+
+
+def test_ai_panel_expands_downward_and_uses_edited_source_text():
+    bar = _make_bar()
+    bar.show_result(_result())
+    bar._toggle_source()
+    bar._source_editor.setPlainText('edited source')
+    _app.processEvents()
+
+    original_y = bar.y()
+    original_height = bar.height()
+    seen = []
+    bar.explain_requested.connect(seen.append)
+
+    bar._on_explain()
+    _app.processEvents()
+
+    assert seen == ['edited source']
+    assert bar.y() == original_y
+    assert bar.height() > original_height
+    assert bar._explain_panel.isVisible()
+
+
+def test_manual_source_entry_can_trigger_retranslation_without_ocr_text():
+    bar = _make_bar()
+    bar._toggle_source()
+    _app.processEvents()
+
+    assert not bar._btn_retranslate.isEnabled()
+
+    bar._source_editor.setPlainText('manual source')
+    _app.processEvents()
+
+    seen = []
+    bar.retranslate_requested.connect(seen.append)
+    bar._btn_retranslate.click()
+    _app.processEvents()
+
+    assert bar._btn_retranslate.isEnabled()
+    assert seen == ['manual source']
+
+
+def test_show_result_does_not_overwrite_active_source_edits():
+    bar = _make_bar()
+    bar.show_result(_result(original='first source'))
+    bar._toggle_source()
+    bar._source_editor.setPlainText('edited source')
+    _app.processEvents()
+
+    bar.show_result(_result(original='new source', translated='新译文'))
+    _app.processEvents()
+
+    assert bar._source_editor.toPlainText() == 'edited source'
+
+
+def test_clear_current_content_resets_source_editor_and_explain_panel():
+    bar = _make_bar()
+    bar.show_result(_result())
+    bar._toggle_source()
+    bar._source_editor.setPlainText('edited source')
+    bar.show_explain('facts')
+    _app.processEvents()
+
+    bar.clear_current_content()
+    _app.processEvents()
+
+    assert bar._source_editor.toPlainText() == ''
+    assert not bar._source_panel.isVisible()
+    assert not bar._explain_panel.isVisible()
+    assert not bar._btn_retranslate.isEnabled()
+    assert bar._explain_text.toPlainText() == ''

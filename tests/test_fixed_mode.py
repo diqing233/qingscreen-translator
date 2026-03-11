@@ -411,3 +411,30 @@ def test_single_paragraph_translation_done_refreshes_when_all_segments_arrive():
 
     assert box._last_paragraph_translations == ['first', 'second']
     box.show_subtitle.assert_called_once_with('full translation')
+
+
+def test_retranslate_requested_runs_translation_without_ocr():
+    from core.controller import CoreController
+
+    ctrl = CoreController.__new__(CoreController)
+    ctrl.result_bar = MagicMock()
+    ctrl._run_translate = MagicMock()
+
+    CoreController._on_retranslate_requested(ctrl, 'edited source')
+
+    ctrl.result_bar.show_loading.assert_called_once()
+    ctrl._run_translate.assert_called_once_with('edited source', None)
+
+
+def test_trigger_explain_prefers_current_result_bar_source_text():
+    from core.controller import CoreController
+
+    ctrl = CoreController.__new__(CoreController)
+    ctrl.result_bar = MagicMock()
+    ctrl.result_bar._current_result = {'original': 'old source'}
+    ctrl.result_bar.current_source_text.return_value = 'edited source'
+    ctrl._on_explain_requested = MagicMock()
+
+    CoreController._trigger_explain(ctrl)
+
+    ctrl._on_explain_requested.assert_called_once_with('edited source')

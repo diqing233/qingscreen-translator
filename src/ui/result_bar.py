@@ -162,6 +162,7 @@ class ResultBar(QWidget):
     start_selection_requested = pyqtSignal()
     stop_clear_requested      = pyqtSignal()
     explain_requested         = pyqtSignal(str)
+    retranslate_requested     = pyqtSignal(str)
     history_requested         = pyqtSignal()
     settings_requested        = pyqtSignal()
     close_requested           = pyqtSignal()
@@ -177,6 +178,9 @@ class ResultBar(QWidget):
         self.settings = settings
         self._current_result = None
         self._source_expanded = False
+        self._explain_expanded = False
+        self._source_dirty = False
+        self._syncing_source_editor = False
         self._minimized = False
         self._drag_pos = QPoint()
         self._box_mode = 'fixed'
@@ -196,6 +200,8 @@ class ResultBar(QWidget):
         self._setup_window()
         self._setup_ui()
         self._position_window()
+        self._update_source_button()
+        self._update_ai_button()
 
     def _setup_window(self):
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
@@ -521,6 +527,79 @@ class ResultBar(QWidget):
         ''')
         bl.addWidget(self._lbl_explain)
 
+        self._source_panel = QWidget()
+        self._source_panel.setVisible(False)
+        src_layout = QVBoxLayout(self._source_panel)
+        src_layout.setContentsMargins(0, 0, 0, 0)
+        src_layout.setSpacing(4)
+        self._source_editor = QTextEdit()
+        self._source_editor.setAcceptRichText(False)
+        self._source_editor.setMinimumHeight(72)
+        self._source_editor.setMaximumHeight(96)
+        self._source_editor.setPlaceholderText('可在这里输入或修改要翻译的内容')
+        self._source_editor.setStyleSheet('''
+            QTextEdit {
+                color: rgba(225,225,235,230); background: rgba(255,255,255,6);
+                border: 1px solid rgba(255,255,255,18); border-radius: 6px;
+                padding: 6px;
+            }
+            QScrollBar:vertical {
+                background: rgba(255,255,255,12); width: 6px; border-radius: 3px;
+            }
+            QScrollBar::handle:vertical {
+                background: rgba(255,255,255,55); border-radius: 3px; min-height: 18px;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+        ''')
+        self._source_editor.textChanged.connect(self._on_source_text_changed)
+        src_layout.addWidget(self._source_editor)
+        src_actions = QHBoxLayout()
+        src_actions.setContentsMargins(0, 0, 0, 0)
+        src_actions.setSpacing(6)
+        src_actions.addStretch()
+        self._btn_retranslate = self._action_btn('重新翻译', '使用当前原文内容重新翻译', self._on_retranslate)
+        self._btn_retranslate.setEnabled(False)
+        src_actions.addWidget(self._btn_retranslate)
+        src_layout.addLayout(src_actions)
+        bl.addWidget(self._source_panel)
+
+        self._explain_panel = QWidget()
+        self._explain_panel.setVisible(False)
+        explain_layout = QVBoxLayout(self._explain_panel)
+        explain_layout.setContentsMargins(0, 0, 0, 0)
+        explain_layout.setSpacing(4)
+        self._explain_loading_label = QLabel('💡 AI 科普中...')
+        self._explain_loading_label.setStyleSheet(
+            'color: rgba(230,220,130,200); font-size: 11px; padding: 2px 4px;'
+        )
+        self._explain_loading_label.setVisible(False)
+        explain_layout.addWidget(self._explain_loading_label)
+        self._explain_text = QTextEdit()
+        self._explain_text.setReadOnly(True)
+        self._explain_text.setMinimumHeight(40)
+        self._explain_text.setMaximumHeight(120)
+        self._explain_text.setMinimumWidth(0)
+        self._explain_text.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self._explain_text.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._explain_text.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self._explain_text.setVisible(False)
+        self._explain_text.setStyleSheet('''
+            QTextEdit {
+                color: rgba(230,220,140,230); font-size: 12px;
+                background: rgba(255,240,100,10); border: none;
+                padding: 4px; border-radius: 4px;
+            }
+            QScrollBar:vertical {
+                background: rgba(255,255,255,12); width: 6px; border-radius: 3px;
+            }
+            QScrollBar::handle:vertical {
+                background: rgba(255,255,160,60); border-radius: 3px; min-height: 18px;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+        ''')
+        explain_layout.addWidget(self._explain_text)
+        bl.addWidget(self._explain_panel)
+
         cl.addWidget(self._body)
 
         outer.addWidget(self._container)
@@ -748,6 +827,47 @@ class ResultBar(QWidget):
             self.adjustSize()
             self._in_adjust = False
 
+    def current_source_text(self) -> str:
+        return self._source_editor.toPlainText().strip()
+
+    def _set_source_text(self, text: str, *, mark_clean: bool):
+        self._syncing_source_editor = True
+        self._source_editor.setPlainText(text or '')
+        self._syncing_source_editor = False
+        self._source_dirty = not mark_clean
+        self._update_retranslate_button()
+
+    def _update_retranslate_button(self):
+        self._btn_retranslate.setEnabled(bool(self.current_source_text()))
+
+    def _resize_preserving_top(self, target_height: int):
+        target_height = max(self.minimumHeight(), target_height)
+        if target_height == self.height():
+            return
+        current_pos = self.pos()
+        self._in_adjust = True
+        self.resize(self.width(), target_height)
+        self._in_adjust = False
+        self.move(current_pos)
+
+    def _toggle_panel(self, panel: QWidget, visible: bool):
+        if panel.isVisible() == visible:
+            return
+        delta = panel.sizeHint().height() + self._body.layout().spacing()
+        panel.setVisible(visible)
+        self._resize_preserving_top(self.height() + (delta if visible else -delta))
+
+    def _update_source_button(self):
+        self._btn_source.setText('原文 ▲' if self._source_expanded else '原文 ▼')
+
+    def _update_ai_button(self):
+        self._btn_ai.setText('💬 AI科普 ▲' if self._explain_expanded else '💬 AI科普 ▼')
+
+    def _on_source_text_changed(self):
+        if not self._syncing_source_editor:
+            self._source_dirty = True
+        self._update_retranslate_button()
+
     def _save_geometry(self):
         """将当前位置和尺寸写入 settings，供"上次位置"选项使用。"""
         self.settings.set('result_bar_last_x', self.x())
@@ -937,6 +1057,116 @@ class ResultBar(QWidget):
             return
         text = self._current_result.get('original', '')
         if text:
+            self.explain_requested.emit(text)
+
+    def clear_current_content(self):
+        self._current_result = None
+        self._source_expanded = False
+        self._explain_expanded = False
+        self._source_dirty = False
+        self._lbl_translation.setPlainText('绛夊緟缈昏瘧...')
+        self._lbl_backend.setText('')
+        self._lbl_source.clear()
+        self._lbl_source.setVisible(False)
+        self._set_source_text('', mark_clean=True)
+        self._toggle_panel(self._source_panel, False)
+        self._update_source_button()
+        self._lbl_explain_loading.setVisible(False)
+        self._lbl_explain.clear()
+        self._lbl_explain.setVisible(False)
+        self._explain_loading_label.setVisible(False)
+        self._explain_text.clear()
+        self._explain_text.setVisible(False)
+        self._toggle_panel(self._explain_panel, False)
+        self._update_ai_button()
+        self._btn_explain_hdr.setVisible(False)
+        self._smart_adjust()
+
+    def show_result(self, result: dict):
+        self._current_result = result
+        self._lbl_explain.setVisible(False)
+        self._btn_explain_hdr.setVisible(False)
+        self._lbl_explain_loading.setVisible(False)
+        self._explain_loading_label.setVisible(False)
+        self._explain_text.clear()
+        self._explain_text.setVisible(False)
+        if self._explain_expanded:
+            self._toggle_panel(self._explain_panel, False)
+        self._explain_expanded = False
+        self._update_ai_button()
+
+        self._lbl_translation.setPlainText(result.get('translated', ''))
+        self._lbl_source.setText(result.get('original', ''))
+        if not self._source_dirty or not self.current_source_text():
+            self._set_source_text(result.get('original', ''), mark_clean=True)
+        self._lbl_backend.setText(f"鏉ユ簮: {result.get('backend', '')}")
+
+        src = result.get('source_lang', '')
+        if src:
+            src_short = next((s for c, s, _ in SOURCE_LANGS
+                              if c == src.lower() or c == src.lower().split('-')[0]), src.upper())
+            self._btn_src_lang.setText(f'{src_short} 鈻?')
+            self._refresh_toolbar_layout()
+
+        if not self.isVisible() and not self._hidden_to_tray:
+            self.show()
+        self._smart_adjust()
+
+    def show_explain_loading(self):
+        self._explain_expanded = True
+        self._toggle_panel(self._explain_panel, True)
+        self._update_ai_button()
+        self._lbl_explain_loading.setVisible(True)
+        self._lbl_explain.setVisible(False)
+        self._explain_loading_label.setVisible(True)
+        self._explain_text.setVisible(False)
+
+    def show_explain(self, text: str):
+        self._explain_expanded = True
+        self._toggle_panel(self._explain_panel, True)
+        self._update_ai_button()
+        self._lbl_explain_loading.setVisible(False)
+        self._lbl_explain.setPlainText(text)
+        self._lbl_explain.setVisible(True)
+        self._explain_loading_label.setVisible(False)
+        self._explain_text.setPlainText(text)
+        self._explain_text.setVisible(True)
+        self._btn_explain_hdr.setVisible(False)
+
+    def _toggle_source(self):
+        self._source_expanded = not self._source_expanded
+        self._lbl_source.setVisible(self._source_expanded)
+        self._toggle_panel(self._source_panel, self._source_expanded)
+        self._update_source_button()
+
+    def _toggle_explain_section(self):
+        vis = not self._explain_expanded
+        self._explain_expanded = vis
+        self._toggle_panel(self._explain_panel, vis)
+        self._update_ai_button()
+        self._lbl_explain.setVisible(vis)
+        self._explain_text.setVisible(vis and bool(self._explain_text.toPlainText()))
+        self._explain_loading_label.setVisible(vis and self._lbl_explain_loading.isVisible())
+
+    def _copy_source(self):
+        text = self.current_source_text()
+        if text:
+            QApplication.clipboard().setText(text)
+
+    def _on_retranslate(self):
+        text = self.current_source_text()
+        if not text:
+            return
+        self._source_dirty = False
+        self.retranslate_requested.emit(text)
+
+    def _on_explain(self):
+        text = self.current_source_text()
+        if not text and self._current_result is None:
+            self.start_selection_requested.emit()
+            return
+        if text:
+            self.show_explain_loading()
             self.explain_requested.emit(text)
 
     def _toggle_minimize(self):

@@ -80,6 +80,7 @@ class CoreController(QObject):
         self.result_bar.start_selection_requested.connect(self._start_selection)
         self.result_bar.stop_clear_requested.connect(self._on_stop_clear_requested)
         self.result_bar.explain_requested.connect(self._on_explain_requested)
+        self.result_bar.retranslate_requested.connect(self._on_retranslate_requested)
         self.result_bar.history_requested.connect(self._show_history)
         self.result_bar.settings_requested.connect(self._show_settings)
         self.result_bar.close_requested.connect(self._handle_result_bar_close)
@@ -621,3 +622,55 @@ class CoreController(QObject):
         for box in boxes:
             if hasattr(box, 'refresh_overlay_style'):
                 box.refresh_overlay_style()
+
+    def _trigger_explain(self):
+        if self.result_bar._current_result:
+            text = ''
+            if hasattr(self.result_bar, 'current_source_text'):
+                text = self.result_bar.current_source_text()
+            if not text:
+                text = self.result_bar._current_result.get('original', '')
+            if text:
+                self._on_explain_requested(text)
+
+    def _on_retranslate_requested(self, text: str):
+        text = str(text or '').strip()
+        if not text:
+            return
+        self.result_bar.show_loading('翻译中...')
+        self._run_translate(text, None)
+
+    def _on_translate_done(self, result: dict, box, worker=None):
+        if self._is_translation_cancelled(worker):
+            return
+        try:
+            self.history.add(
+                result.get('original', ''),
+                result.get('translated', ''),
+                result.get('source_lang', ''),
+                result.get('target_lang', ''),
+                result.get('backend', ''),
+            )
+        except Exception as e:
+            logger.warning(f'History save failed: {e}')
+
+        if box is not None and self._box_mode == 'multi':
+            self._multi_results[box.box_id] = result
+            self.result_bar.show_multi_results(list(self._multi_results.values()))
+        else:
+            self.result_bar.show_result(result)
+
+        translated = result.get('translated', '')
+        if box is not None:
+            setattr(box, '_last_translation', translated)
+            overlay_mode = getattr(box, '_subtitle_mode', 'off')
+            if overlay_mode == 'over' and getattr(box, '_last_ocr_paragraphs', []) and not getattr(box, '_last_paragraph_translations', []):
+                self._run_paragraph_translate(box)
+            if translated and (getattr(box, '_subtitle_active', False) or overlay_mode != 'off'):
+                box.show_subtitle(translated)
+
+            if box.mode == 'temp':
+                box.start_dismiss_timer()
+            elif getattr(box, '_pending_auto', False):
+                box._pending_auto = False
+                box.start_auto_translate()
