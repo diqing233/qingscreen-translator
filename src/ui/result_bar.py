@@ -762,6 +762,12 @@ class ResultBar(QWidget):
             self._manual_size = True
             self._save_timer.start()
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        # Recompute once the widget is visible so the toolbar width reflects
+        # the final visible controls and avoids an initial stale geometry.
+        self._refresh_toolbar_layout()
+
     def refresh_opacity(self):
         self._apply_opacity()
 

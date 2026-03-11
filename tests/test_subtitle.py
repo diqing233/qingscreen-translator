@@ -115,6 +115,23 @@ def test_overlay_mode_over_uses_paragraph_bars_when_data_exists():
     assert box._subtitle_paragraph_wins[1].y() >= 38
 
 
+def test_paragraph_overlays_stay_below_toolbar_safe_area():
+    box, _ = _make_box()
+    box.show()
+    _set_paragraph_overlay_data(box)
+    box.set_overlay_mode('over')
+    box.show_subtitle('full translation')
+    _app.processEvents()
+
+    safe_top = box._btn_bar.sizeHint().height() + 6
+    first_rect = box._subtitle_paragraph_wins[0].geometry()
+    second_rect = box._subtitle_paragraph_wins[1].geometry()
+
+    assert first_rect.y() >= safe_top
+    assert not first_rect.intersects(box._btn_bar.geometry())
+    assert first_rect.bottom() < second_rect.top()
+
+
 def test_overlay_mode_over_uses_dark_backdrop():
     box, _ = _make_box()
     box.show()

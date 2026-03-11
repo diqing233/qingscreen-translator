@@ -310,9 +310,18 @@ class TranslationBox(QWidget):
     def _below_overlay_rect(self) -> QRect:
         return QRect(self.x(), self.y() + self.height(), self.width(), 0)
 
+    def _toolbar_safe_top(self) -> int:
+        layout = self.layout()
+        top_margin = layout.contentsMargins().top() if layout is not None else 6
+        spacing = layout.spacing() if layout is not None else 2
+        return max(28, top_margin + self._btn_bar.sizeHint().height() + spacing)
+
+    def _raise_toolbar(self):
+        self._btn_bar.raise_()
+
     def _over_fallback_rect(self) -> QRect:
         left = 2
-        top = 28
+        top = self._toolbar_safe_top()
         right = 2
         bottom = 8
         return QRect(
@@ -361,6 +370,9 @@ class TranslationBox(QWidget):
 
     def _layout_paragraph_subtitles(self):
         self._sync_paragraph_subtitle_wins(len(self._last_ocr_paragraphs))
+        next_top = self._toolbar_safe_top()
+        min_height = 18
+        paragraph_spacing = 2
         for paragraph, translated, win in zip(
             self._last_ocr_paragraphs,
             self._last_paragraph_translations,
@@ -369,13 +381,17 @@ class TranslationBox(QWidget):
             self._apply_paragraph_subtitle_style(win)
             win.setText(translated)
             rect = self._paragraph_overlay_rect(paragraph)
-            available_height = max(24, self.height() - rect.y() - 4)
+            top = max(rect.y(), next_top)
+            max_top = max(self._toolbar_safe_top(), self.height() - min_height)
+            top = min(top, max_top)
+            available_height = max(min_height, self.height() - top)
             win.setMinimumSize(0, 0)
             win.setMaximumSize(rect.width(), available_height)
             win.setFixedWidth(rect.width())
             win.adjustSize()
-            height = min(max(24, win.sizeHint().height()), available_height)
-            win.setGeometry(rect.x(), rect.y(), rect.width(), height)
+            height = min(max(min_height, win.sizeHint().height()), available_height)
+            win.setGeometry(rect.x(), top, rect.width(), height)
+            next_top = top + height + paragraph_spacing
 
     def _show_single_subtitle(self, text: str):
         self._sync_paragraph_subtitle_wins(0)
@@ -391,6 +407,7 @@ class TranslationBox(QWidget):
             self._layout_single_inbox_subtitle()
             win.show()
             win.raise_()
+            self._raise_toolbar()
             return
 
         if self._subtitle_inbox_win is not None:
@@ -411,6 +428,7 @@ class TranslationBox(QWidget):
         for win in self._subtitle_paragraph_wins:
             win.show()
             win.raise_()
+        self._raise_toolbar()
 
     def _hide_all_subtitles(self):
         for win in self._all_subtitle_wins():
@@ -594,6 +612,8 @@ class TranslationBox(QWidget):
             global_pos = QCursor.pos()
         visible = self.isVisible() and self._box_global_rect().contains(global_pos)
         self._btn_bar.setVisible(visible)
+        if visible:
+            self._raise_toolbar()
 
     def enterEvent(self, event):
         self._refresh_toolbar_visibility()
