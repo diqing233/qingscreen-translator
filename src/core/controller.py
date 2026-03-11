@@ -31,7 +31,7 @@ class CoreController(QObject):
         self._active_translation_workers = {}
         self._cancelled_translation_jobs = set()
         self._translation_job_seq = 0
-        self._box_mode = 'temp'
+        self._box_mode = 'fixed'
         self._translate_mode = 'manual'
         self._multi_results: dict  = {}   # box_id → result dict（多框模式）
         self._box_img_hashes: dict = {}   # box_id → float（自动翻译变化检测）
@@ -293,6 +293,8 @@ class CoreController(QObject):
     def _on_ocr_done_for_rect(self, text, rect, worker=None):
         """截图完成后才创建翻译框，避免框遮挡被截图区域"""
         box = self.box_manager.create_box(rect)
+        if hasattr(box, 'overlay_font_delta_changed'):
+            box.overlay_font_delta_changed.connect(self._refresh_overlay_font_styles)
         # 保存初始哈希，供后续自动翻译变化检测使用
         if worker is not None and worker.img_hash is not None:
             self._box_img_hashes[box.box_id] = worker.img_hash
@@ -384,6 +386,7 @@ class CoreController(QObject):
 
         # 若该框字幕已激活，刷新字幕内容
         translated = result.get('translated', '')
+        setattr(box, '_last_translation', translated)
         overlay_mode = getattr(box, '_subtitle_mode', 'off')
         if translated and (getattr(box, '_subtitle_active', False) or overlay_mode != 'off'):
             box.show_subtitle(translated)

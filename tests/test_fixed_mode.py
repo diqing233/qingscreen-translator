@@ -134,67 +134,73 @@ def test_translate_done_no_subtitle_refresh_when_overlay_disabled():
     box.show_subtitle.assert_not_called()
 
 
-def test_overlay_requested_applies_requested_mode_to_all_boxes():
+def test_translate_done_stores_last_translation_even_when_overlay_disabled():
     from core.controller import CoreController
 
     ctrl = CoreController.__new__(CoreController)
+    ctrl._box_mode = 'single'
     ctrl._multi_results = {}
+    ctrl.history = MagicMock()
+    ctrl.result_bar = MagicMock()
 
-    box1 = MagicMock()
-    box1.box_id = 1
-    box2 = MagicMock()
-    box2.box_id = 2
-    ctrl.box_manager = MagicMock()
-    ctrl.box_manager._boxes = {1: box1, 2: box2}
+    box = MagicMock()
+    box.box_id = 1
+    box.mode = 'fixed'
+    box._subtitle_mode = 'off'
+    box._subtitle_active = False
+    box._pending_auto = False
+    box._last_translation = ''
 
-    ctrl._on_overlay_requested('over', 'translated')
-
-    box1.set_overlay_mode.assert_called_once_with('over')
-    box2.set_overlay_mode.assert_called_once_with('over')
-    box1.show_subtitle.assert_called_once_with('translated')
-    box2.show_subtitle.assert_called_once_with('translated')
-
-
-def test_overlay_requested_uses_multi_results_when_available():
-    from core.controller import CoreController
-
-    ctrl = CoreController.__new__(CoreController)
-    ctrl._multi_results = {
-        1: {'translated': 'box one'},
-        2: {'translated': 'box two'},
+    result = {
+        'original': 'hello',
+        'translated': 'ni hao',
+        'source_lang': 'en',
+        'target_lang': 'zh-CN',
+        'backend': 'google',
     }
+    ctrl._on_translate_done(result, box)
 
-    box1 = MagicMock()
-    box1.box_id = 1
-    box2 = MagicMock()
-    box2.box_id = 2
-    ctrl.box_manager = MagicMock()
-    ctrl.box_manager._boxes = {1: box1, 2: box2}
-
-    ctrl._on_overlay_requested('below', 'fallback')
-
-    box1.set_overlay_mode.assert_called_once_with('below')
-    box2.set_overlay_mode.assert_called_once_with('below')
-    box1.show_subtitle.assert_called_once_with('box one')
-    box2.show_subtitle.assert_called_once_with('box two')
+    assert box._last_translation == 'ni hao'
 
 
-def test_overlay_requested_off_hides_all_boxes():
+def test_refresh_overlay_font_styles_updates_all_boxes():
     from core.controller import CoreController
 
     ctrl = CoreController.__new__(CoreController)
-    ctrl._multi_results = {}
-
     box1 = MagicMock()
-    box1.box_id = 1
     box2 = MagicMock()
-    box2.box_id = 2
     ctrl.box_manager = MagicMock()
     ctrl.box_manager._boxes = {1: box1, 2: box2}
 
-    ctrl._on_overlay_requested('off', 'translated')
+    ctrl._refresh_overlay_font_styles()
 
-    box1.set_overlay_mode.assert_called_once_with('off')
-    box2.set_overlay_mode.assert_called_once_with('off')
-    box1.hide_subtitle.assert_called_once()
-    box2.hide_subtitle.assert_called_once()
+    box1.refresh_overlay_style.assert_called_once_with()
+    box2.refresh_overlay_style.assert_called_once_with()
+
+
+def test_refresh_overlay_font_styles_ignores_boxes_without_refresh_method():
+    from core.controller import CoreController
+
+    ctrl = CoreController.__new__(CoreController)
+
+    box1 = MagicMock()
+    box2 = object()
+    ctrl.box_manager = MagicMock()
+    ctrl.box_manager._boxes = {1: box1, 2: box2}
+
+    ctrl._refresh_overlay_font_styles()
+
+    box1.refresh_overlay_style.assert_called_once_with()
+
+
+def test_controller_defaults_to_fixed_box_mode(monkeypatch):
+    import core.history
+    import core.settings
+    from core.controller import CoreController
+
+    monkeypatch.setattr(core.settings, 'SettingsStore', lambda: MagicMock())
+    monkeypatch.setattr(core.history, 'HistoryDB', lambda: MagicMock())
+
+    ctrl = CoreController(_app)
+
+    assert ctrl._box_mode == 'fixed'

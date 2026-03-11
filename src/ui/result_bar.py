@@ -179,7 +179,7 @@ class ResultBar(QWidget):
         self._source_expanded = False
         self._minimized = False
         self._drag_pos = QPoint()
-        self._box_mode = 'temp'
+        self._box_mode = 'fixed'
         self._overlay_mode = self.settings.get('overlay_default_mode', 'off')
         self._translation_busy = False
         self._translate_mode = 'manual'
@@ -365,7 +365,7 @@ class ResultBar(QWidget):
         # 滑动切换：仅固定/多框模式显示
         self._toggle = TranslateToggle()
         self._toggle.toggled.connect(self._on_toggle_changed)
-        self._toggle.setVisible(False)
+        self._toggle.setVisible(self._box_mode != 'temp')
         tb.addWidget(self._toggle)
 
         tb.addStretch()
@@ -402,9 +402,11 @@ class ResultBar(QWidget):
             _tb_row.addWidget(b)
         cl.addLayout(_tb_row)
         self.set_stop_clear_busy(False)
+        self._refresh_overlay_button()
+        self._detach_overlay_controls()
+        self._toggle.setVisible(self._box_mode != 'temp')
         self._refresh_toolbar_layout()
         self._set_active_mode_btn(self._box_mode)
-        self._refresh_overlay_button()
 
         # 分隔线
         sep = QWidget()
@@ -632,6 +634,16 @@ class ResultBar(QWidget):
         self._update_lang_button_widths()
         self._tb_widget.adjustSize()
         self._tb_widget.setFixedSize(self._tb_widget.sizeHint())
+
+    def _detach_overlay_controls(self):
+        for name in ('_btn_overlay', '_btn_overlay_font_down', '_btn_overlay_font_up'):
+            if not hasattr(self, name):
+                continue
+            btn = getattr(self, name)
+            self._tb_layout.removeWidget(btn)
+            btn.hide()
+            btn.setParent(None)
+            delattr(self, name)
 
     def set_stop_clear_busy(self, busy: bool):
         self._translation_busy = busy
@@ -871,6 +883,8 @@ class ResultBar(QWidget):
         self._manual_size = True
 
     def _refresh_overlay_button(self):
+        if not hasattr(self, '_btn_overlay'):
+            return
         self._btn_overlay.setToolTip(OVERLAY_MODE_META.get(self._overlay_mode, OVERLAY_MODE_META['off']))
         if self._overlay_mode == 'off':
             self._btn_overlay.setStyleSheet('''

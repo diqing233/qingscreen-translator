@@ -38,11 +38,11 @@ def _make_bar():
     return bar
 
 
-def test_toggle_is_placed_after_overlay_button():
+def test_toggle_is_placed_after_copy_button():
     bar = _make_bar()
     layout = bar._tb_scroll.widget().layout()
 
-    assert layout.indexOf(bar._toggle) > layout.indexOf(bar._btn_overlay)
+    assert layout.indexOf(bar._toggle) > layout.indexOf(bar._btn_copy_trans)
 
 
 def test_stop_clear_button_is_placed_after_play_button():
@@ -80,53 +80,36 @@ def test_language_buttons_reserve_enough_width_for_labels():
     assert bar._btn_tgt_lang.minimumWidth() >= bar._btn_tgt_lang.sizeHint().width()
 
 
-def test_overlay_button_cycles_modes():
+def test_result_bar_no_longer_exposes_overlay_controls():
     bar = _make_bar()
 
-    assert bar._overlay_mode == 'off'
-
-    bar._btn_overlay.click()
-    _app.processEvents()
-    assert bar._overlay_mode == 'over'
-
-    bar._btn_overlay.click()
-    _app.processEvents()
-    assert bar._overlay_mode == 'below'
-
-    bar._btn_overlay.click()
-    _app.processEvents()
-    assert bar._overlay_mode == 'off'
-
-
-def test_overlay_font_buttons_adjust_settings():
-    bar = _make_bar()
-
-    bar._btn_overlay_font_up.click()
-    _app.processEvents()
-    assert bar.settings._values['overlay_font_delta'] == 1
-
-    bar._btn_overlay_font_down.click()
-    _app.processEvents()
-    assert bar.settings._values['overlay_font_delta'] == 0
+    assert not hasattr(bar, '_btn_overlay')
+    assert not hasattr(bar, '_btn_overlay_font_up')
+    assert not hasattr(bar, '_btn_overlay_font_down')
 
 
 def test_box_mode_cycle_button_rotates_modes():
+    from ui.result_bar import BOX_MODE_META
+
     bar = _make_bar()
 
-    assert bar._box_mode == 'temp'
-    assert bar._btn_box_mode_cycle.text() == '临时'
-
-    bar._btn_box_mode_cycle.click()
-    _app.processEvents()
     assert bar._box_mode == 'fixed'
-    assert bar._btn_box_mode_cycle.text() == '固定'
+    assert bar._toggle.isVisible()
+    assert bar._btn_box_mode_cycle.text() == BOX_MODE_META['fixed'][0]
 
     bar._btn_box_mode_cycle.click()
     _app.processEvents()
     assert bar._box_mode == 'multi'
-    assert bar._btn_box_mode_cycle.text() == '多框'
+    assert bar._btn_box_mode_cycle.text() == BOX_MODE_META['multi'][0]
 
     bar._btn_box_mode_cycle.click()
     _app.processEvents()
     assert bar._box_mode == 'temp'
-    assert bar._btn_box_mode_cycle.text() == '临时'
+    assert not bar._toggle.isVisible()
+    assert bar._btn_box_mode_cycle.text() == BOX_MODE_META['temp'][0]
+
+    bar._btn_box_mode_cycle.click()
+    _app.processEvents()
+    assert bar._box_mode == 'fixed'
+    assert bar._toggle.isVisible()
+    assert bar._btn_box_mode_cycle.text() == BOX_MODE_META['fixed'][0]

@@ -7,6 +7,7 @@ class TranslationBox(QWidget):
     translate_requested = pyqtSignal(object)
     close_requested = pyqtSignal(object)
     mode_changed = pyqtSignal(object, str)
+    overlay_font_delta_changed = pyqtSignal(int)
 
     MODE_TEMP = 'temp'
     MODE_FIXED = 'fixed'
@@ -60,12 +61,22 @@ class TranslationBox(QWidget):
         btn_layout.setSpacing(2)
 
         self._btn_translate = self._make_btn('译', '立即翻译', lambda: self.translate_requested.emit(self))
-        self._btn_pin = self._make_btn('📌', '固定/取消固定', self._on_toggle_pin)
+        self._btn_pin = self._make_btn('钉', '固定/取消固定', self._on_toggle_pin)
         self._btn_subtitle = self._make_btn('⊞', '覆盖翻译', self._on_toggle_subtitle)
+        self._btn_overlay_font_down = self._make_btn('A-', '减小覆盖译文字号', lambda: self._adjust_overlay_font_delta(-1), width=24)
+        self._btn_overlay_font_up = self._make_btn('A+', '增大覆盖译文字号', lambda: self._adjust_overlay_font_delta(1), width=24)
         self._btn_hide = self._make_btn('隐', '隐藏', self.hide)
         self._btn_close = self._make_btn('✕', '关闭', lambda: self.close_requested.emit(self))
 
-        for btn in [self._btn_translate, self._btn_pin, self._btn_subtitle, self._btn_hide, self._btn_close]:
+        for btn in [
+            self._btn_translate,
+            self._btn_pin,
+            self._btn_subtitle,
+            self._btn_overlay_font_down,
+            self._btn_overlay_font_up,
+            self._btn_hide,
+            self._btn_close,
+        ]:
             btn_layout.addWidget(btn)
         btn_layout.addStretch()
         self._btn_bar.setVisible(False)
@@ -77,10 +88,10 @@ class TranslationBox(QWidget):
         layout.addWidget(self._ocr_label)
         layout.addStretch()
 
-    def _make_btn(self, icon, tooltip, callback):
-        btn = QPushButton(icon)
+    def _make_btn(self, label, tooltip, callback, width=22):
+        btn = QPushButton(label)
         btn.setToolTip(tooltip)
-        btn.setFixedSize(22, 22)
+        btn.setFixedSize(width, 22)
         btn.setStyleSheet('''
             QPushButton {
                 background: rgba(30,30,40,180); color: white;
@@ -97,9 +108,9 @@ class TranslationBox(QWidget):
         return self.OVERLAY_OFF
 
     def _current_overlay_font_size(self) -> int:
-        base = max(12, min(36, int(self.height() * 0.32)))
+        base = max(12, min(18, int(self.height() * 0.18)))
         delta = int(self.settings.get('overlay_font_delta', 0))
-        return max(10, min(48, base + delta))
+        return max(10, min(28, base + delta))
 
     def _create_subtitle_win(self):
         win = QLabel()
@@ -108,10 +119,20 @@ class TranslationBox(QWidget):
         win.setWordWrap(True)
         return win
 
-    def _overlay_rect(self) -> QRect:
-        if self._subtitle_mode == self.OVERLAY_OVER:
-            return QRect(self.x(), self.y(), self.width(), self.height())
+    def _below_overlay_rect(self) -> QRect:
         return QRect(self.x(), self.y() + self.height(), self.width(), 0)
+
+    def _over_overlay_bounds(self) -> QRect:
+        left = 2
+        top = 28
+        right = 2
+        bottom = 8
+        return QRect(
+            self.x() + left,
+            self.y() + top,
+            max(60, self.width() - left - right),
+            max(20, self.height() - top - bottom),
+        )
 
     def _apply_subtitle_style(self):
         if self._subtitle_win is None:
@@ -119,43 +140,49 @@ class TranslationBox(QWidget):
 
         font = self._subtitle_win.font()
         font.setPixelSize(self._current_overlay_font_size())
+        font.setBold(False)
         self._subtitle_win.setFont(font)
 
         if self._subtitle_mode == self.OVERLAY_OVER:
             self._subtitle_win.setAlignment(Qt.AlignLeft | Qt.AlignTop)
             self._subtitle_win.setStyleSheet('''
                 QLabel {
-                    background: rgba(12, 12, 18, 170);
-                    color: #f0f0f0;
-                    padding: 4px 6px;
-                    border: 1px solid rgba(80, 140, 255, 70);
-                    border-radius: 4px;
+                    background: rgba(6, 10, 16, 244);
+                    color: rgb(240, 248, 255);
+                    padding: 6px 10px 7px 10px;
+                    border: 1px solid rgba(150, 190, 235, 110);
+                    border-radius: 2px;
                 }
             ''')
-        else:
-            self._subtitle_win.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-            self._subtitle_win.setStyleSheet('''
-                QLabel {
-                    background: rgba(15, 15, 24, 210);
-                    color: #f0f0f0;
-                    padding: 6px 12px;
-                    border-top: 1px solid rgba(80, 140, 255, 100);
-                    border-radius: 0px 0px 6px 6px;
-                }
-            ''')
+            return
+
+        self._subtitle_win.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self._subtitle_win.setStyleSheet('''
+            QLabel {
+                background: rgba(6, 10, 16, 232);
+                color: #f0f0f0;
+                padding: 6px 12px;
+                border: 1px solid rgba(120, 165, 230, 90);
+                border-radius: 0px 0px 6px 6px;
+            }
+        ''')
 
     def _layout_subtitle(self):
         if self._subtitle_win is None:
             return
 
-        rect = self._overlay_rect()
         if self._subtitle_mode == self.OVERLAY_OVER:
-            self._subtitle_win.setMinimumSize(rect.width(), rect.height())
-            self._subtitle_win.setMaximumSize(rect.width(), rect.height())
-            self._subtitle_win.resize(rect.width(), rect.height())
-            self._subtitle_win.move(rect.x(), rect.y())
+            bounds = self._over_overlay_bounds()
+            self._subtitle_win.setMinimumSize(0, 0)
+            self._subtitle_win.setMaximumSize(bounds.width(), bounds.height())
+            self._subtitle_win.setFixedWidth(bounds.width())
+            self._subtitle_win.adjustSize()
+            height = min(max(24, self._subtitle_win.sizeHint().height()), bounds.height())
+            self._subtitle_win.resize(bounds.width(), height)
+            self._subtitle_win.move(bounds.x(), bounds.y())
             return
 
+        rect = self._below_overlay_rect()
         self._subtitle_win.setMinimumSize(0, 0)
         self._subtitle_win.setMaximumSize(16777215, 16777215)
         self._subtitle_win.setFixedWidth(rect.width())
@@ -163,12 +190,6 @@ class TranslationBox(QWidget):
         self._subtitle_win.move(rect.x(), rect.y())
 
     def _update_subtitle_button(self):
-        next_mode = self.OVERLAY_CYCLE[0]
-        if self._subtitle_mode == self.OVERLAY_OVER:
-            next_mode = self.OVERLAY_BELOW
-        elif self._subtitle_mode == self.OVERLAY_BELOW:
-            next_mode = self.OVERLAY_OFF
-
         tips = {
             self.OVERLAY_OFF: '覆盖翻译：关闭，点击切到原文上',
             self.OVERLAY_OVER: '覆盖翻译：原文上，点击切到原文下方',
@@ -199,7 +220,7 @@ class TranslationBox(QWidget):
 
     def set_mode(self, mode: str):
         self.mode = mode
-        self._btn_pin.setText('📍' if mode == self.MODE_FIXED else '📌')
+        self._btn_pin.setText('📍' if mode == self.MODE_FIXED else '钉')
         if mode == self.MODE_FIXED:
             self._dismiss_timer.stop()
         else:
@@ -211,10 +232,11 @@ class TranslationBox(QWidget):
         self._subtitle_mode = self._normalize_overlay_mode(mode)
         if self._subtitle_mode == self.OVERLAY_OFF:
             self.hide_subtitle()
-        else:
-            self._update_subtitle_button()
-            if self._subtitle_active and self._last_translation:
-                self.show_subtitle(self._last_translation)
+            return
+
+        self._update_subtitle_button()
+        if self._subtitle_active and self._last_translation:
+            self.show_subtitle(self._last_translation)
 
     def refresh_overlay_style(self):
         if self._subtitle_win is None:
@@ -222,6 +244,13 @@ class TranslationBox(QWidget):
         self._apply_subtitle_style()
         if self._subtitle_active:
             self._layout_subtitle()
+
+    def _adjust_overlay_font_delta(self, delta: int):
+        current = int(self.settings.get('overlay_font_delta', 0))
+        value = max(-12, min(24, current + delta))
+        self.settings.set('overlay_font_delta', value)
+        self.refresh_overlay_style()
+        self.overlay_font_delta_changed.emit(value)
 
     def set_ocr_text(self, text: str):
         self._ocr_text = text
