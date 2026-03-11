@@ -1,6 +1,84 @@
 from PyQt5.QtCore import QPoint, QRect, QTimer, Qt, pyqtSignal
-from PyQt5.QtGui import QColor, QPainter, QPen
+from PyQt5.QtGui import QColor, QCursor, QPainter, QPen
 from PyQt5.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+
+
+class _SubtitleWindow(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._style_sheet = ""
+        self._bg_color = QColor(6, 10, 16, 232)
+        self._border_color = QColor(120, 165, 230, 90)
+        self._radius = 6
+
+        self._label = QLabel(self)
+        self._label.setWordWrap(True)
+        self._label.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self._label.setStyleSheet("QLabel { background: transparent; border: none; color: #f0f0f0; }")
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 6, 12, 6)
+        layout.setSpacing(0)
+        layout.addWidget(self._label)
+
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+
+    def set_surface_style(
+        self,
+        *,
+        style_sheet: str,
+        bg_color: QColor,
+        text_color: QColor,
+        border_color: QColor,
+        radius: int,
+        margins,
+        alignment: int,
+    ):
+        self._style_sheet = style_sheet
+        self._bg_color = QColor(bg_color)
+        self._border_color = QColor(border_color)
+        self._radius = radius
+        self.layout().setContentsMargins(*margins)
+        self._label.setAlignment(alignment)
+        self._label.setStyleSheet(
+            f"QLabel {{ background: transparent; border: none; color: {text_color.name()}; }}"
+        )
+        self.updateGeometry()
+        self.update()
+
+    def setText(self, text: str):
+        self._label.setText(text)
+        self.updateGeometry()
+
+    def text(self) -> str:
+        return self._label.text()
+
+    def setWordWrap(self, enabled: bool):
+        self._label.setWordWrap(enabled)
+
+    def setAlignment(self, alignment: int):
+        self._label.setAlignment(alignment)
+
+    def font(self):
+        return self._label.font()
+
+    def setFont(self, font):
+        self._label.setFont(font)
+        super().setFont(font)
+        self.updateGeometry()
+
+    def styleSheet(self) -> str:
+        return self._style_sheet
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        rect = self.rect().adjusted(0, 0, -1, -1)
+        painter.setPen(QPen(self._border_color, 1))
+        painter.setBrush(self._bg_color)
+        painter.drawRoundedRect(rect, self._radius, self._radius)
+        super().paintEvent(event)
 
 
 class TranslationBox(QWidget):
@@ -27,8 +105,10 @@ class TranslationBox(QWidget):
         self._drag_pos = QPoint()
         self._ocr_text = ""
         self._subtitle_win = None
+        self._subtitle_inbox_win = None
         self._subtitle_paragraph_wins = []
         self._subtitle_active = False
+        self._position_locked = False
         self._subtitle_mode = self._normalize_overlay_mode(
             self.settings.get("overlay_default_mode", self.OVERLAY_OFF)
         )
@@ -46,14 +126,20 @@ class TranslationBox(QWidget):
         self._dismiss_timer.setSingleShot(True)
         self._dismiss_timer.timeout.connect(self._on_dismiss_timeout)
 
+        self._hover_timer = QTimer(self)
+        self._hover_timer.setInterval(50)
+        self._hover_timer.timeout.connect(self._refresh_toolbar_visibility)
+
         self._setup_ui()
         self._setup_window(rect)
+        self._update_pin_button()
         self._update_subtitle_button()
 
     def _setup_window(self, rect: QRect):
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_AlwaysShowToolTips, True)
+        self.setMouseTracking(True)
         self.setMinimumSize(80, 50)
         self.setGeometry(rect)
 
@@ -131,21 +217,34 @@ class TranslationBox(QWidget):
         delta = int(self.settings.get("overlay_font_delta", 0))
         return max(10, min(28, base + delta))
 
-    def _create_subtitle_win(self):
-        win = QLabel()
-        win.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
-        win.setAttribute(Qt.WA_TranslucentBackground)
+    def _create_detached_subtitle_win(self):
+        win = _SubtitleWindow()
+        flags = Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
+        if hasattr(Qt, "WindowTransparentForInput"):
+            flags |= Qt.WindowTransparentForInput
+        win.setWindowFlags(flags)
         win.setWordWrap(True)
+        return win
+
+    def _create_inbox_subtitle_win(self):
+        win = _SubtitleWindow(self)
+        win.setWordWrap(True)
+        win.hide()
         return win
 
     def _ensure_single_subtitle_win(self):
         if self._subtitle_win is None:
-            self._subtitle_win = self._create_subtitle_win()
+            self._subtitle_win = self._create_detached_subtitle_win()
         return self._subtitle_win
+
+    def _ensure_single_inbox_subtitle_win(self):
+        if self._subtitle_inbox_win is None:
+            self._subtitle_inbox_win = self._create_inbox_subtitle_win()
+        return self._subtitle_inbox_win
 
     def _sync_paragraph_subtitle_wins(self, target_count: int):
         while len(self._subtitle_paragraph_wins) < target_count:
-            self._subtitle_paragraph_wins.append(self._create_subtitle_win())
+            self._subtitle_paragraph_wins.append(self._create_inbox_subtitle_win())
         while len(self._subtitle_paragraph_wins) > target_count:
             win = self._subtitle_paragraph_wins.pop()
             win.close()
@@ -154,6 +253,8 @@ class TranslationBox(QWidget):
         wins = []
         if self._subtitle_win is not None:
             wins.append(self._subtitle_win)
+        if self._subtitle_inbox_win is not None:
+            wins.append(self._subtitle_inbox_win)
         wins.extend(self._subtitle_paragraph_wins)
         return wins
 
@@ -163,42 +264,10 @@ class TranslationBox(QWidget):
         font.setBold(False)
         win.setFont(font)
 
-    def _apply_single_subtitle_style(self):
-        win = self._ensure_single_subtitle_win()
+    def _apply_over_subtitle_style(self, win):
         self._apply_font(win)
-        if self._subtitle_mode == self.OVERLAY_OVER:
-            win.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-            win.setStyleSheet(
-                """
-                QLabel {
-                    background: rgba(6, 10, 16, 244);
-                    color: rgb(240, 248, 255);
-                    padding: 6px 10px 7px 10px;
-                    border: 1px solid rgba(150, 190, 235, 110);
-                    border-radius: 2px;
-                }
-                """
-            )
-            return
-
-        win.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        win.setStyleSheet(
-            """
-            QLabel {
-                background: rgba(6, 10, 16, 232);
-                color: #f0f0f0;
-                padding: 6px 12px;
-                border: 1px solid rgba(120, 165, 230, 90);
-                border-radius: 0px 0px 6px 6px;
-            }
-            """
-        )
-
-    def _apply_paragraph_subtitle_style(self, win):
-        self._apply_font(win)
-        win.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        win.setStyleSheet(
-            """
+        win.set_surface_style(
+            style_sheet="""
             QLabel {
                 background: rgba(6, 10, 16, 244);
                 color: rgb(240, 248, 255);
@@ -206,30 +275,59 @@ class TranslationBox(QWidget):
                 border: 1px solid rgba(150, 190, 235, 110);
                 border-radius: 2px;
             }
-            """
+            """,
+            bg_color=QColor(6, 10, 16, 244),
+            text_color=QColor(240, 248, 255),
+            border_color=QColor(150, 190, 235, 110),
+            radius=2,
+            margins=(10, 6, 10, 7),
+            alignment=Qt.AlignLeft | Qt.AlignTop,
         )
+
+    def _apply_below_subtitle_style(self, win):
+        self._apply_font(win)
+        win.set_surface_style(
+            style_sheet="""
+            QLabel {
+                background: rgba(6, 10, 16, 232);
+                color: #f0f0f0;
+                padding: 6px 12px;
+                border: 1px solid rgba(120, 165, 230, 90);
+                border-radius: 0px 0px 6px 6px;
+            }
+            """,
+            bg_color=QColor(6, 10, 16, 232),
+            text_color=QColor(240, 240, 240),
+            border_color=QColor(120, 165, 230, 90),
+            radius=6,
+            margins=(12, 6, 12, 6),
+            alignment=Qt.AlignLeft | Qt.AlignVCenter,
+        )
+
+    def _apply_paragraph_subtitle_style(self, win):
+        self._apply_over_subtitle_style(win)
 
     def _below_overlay_rect(self) -> QRect:
         return QRect(self.x(), self.y() + self.height(), self.width(), 0)
 
-    def _over_fallback_bounds(self) -> QRect:
+    def _over_fallback_rect(self) -> QRect:
         left = 2
         top = 28
         right = 2
         bottom = 8
         return QRect(
-            self.x() + left,
-            self.y() + top,
+            left,
+            top,
             max(60, self.width() - left - right),
             max(20, self.height() - top - bottom),
         )
 
     def _paragraph_overlay_rect(self, paragraph):
         rect = paragraph.get("rect", {})
-        x = self.x() + max(0, int(rect.get("x", 0)))
-        y = self.y() + max(0, int(rect.get("y", 0)))
+        x = max(0, int(rect.get("x", 0)))
+        y = max(0, int(rect.get("y", 0)))
         width = max(80, int(rect.get("width", 0)))
-        max_width = max(80, self.x() + self.width() - x)
+        max_width = max(80, self.width() - x)
         width = min(width, max_width)
         return QRect(x, y, width, max(20, int(rect.get("height", 0))))
 
@@ -241,25 +339,25 @@ class TranslationBox(QWidget):
             and all(self._last_paragraph_translations)
         )
 
-    def _layout_single_subtitle(self):
+    def _layout_single_detached_subtitle(self):
         win = self._ensure_single_subtitle_win()
-        if self._subtitle_mode == self.OVERLAY_OVER:
-            bounds = self._over_fallback_bounds()
-            win.setMinimumSize(0, 0)
-            win.setMaximumSize(bounds.width(), bounds.height())
-            win.setFixedWidth(bounds.width())
-            win.adjustSize()
-            height = min(max(24, win.sizeHint().height()), bounds.height())
-            win.resize(bounds.width(), height)
-            win.move(bounds.x(), bounds.y())
-            return
-
         rect = self._below_overlay_rect()
         win.setMinimumSize(0, 0)
         win.setMaximumSize(16777215, 16777215)
         win.setFixedWidth(rect.width())
         win.adjustSize()
         win.move(rect.x(), rect.y())
+
+    def _layout_single_inbox_subtitle(self):
+        win = self._ensure_single_inbox_subtitle_win()
+        bounds = self._over_fallback_rect()
+        available_height = max(24, self.height() - bounds.y() - 4)
+        win.setMinimumSize(0, 0)
+        win.setMaximumSize(bounds.width(), available_height)
+        win.setFixedWidth(bounds.width())
+        win.adjustSize()
+        height = min(max(24, win.sizeHint().height()), available_height)
+        win.setGeometry(bounds.x(), bounds.y(), bounds.width(), height)
 
     def _layout_paragraph_subtitles(self):
         self._sync_paragraph_subtitle_wins(len(self._last_ocr_paragraphs))
@@ -271,28 +369,44 @@ class TranslationBox(QWidget):
             self._apply_paragraph_subtitle_style(win)
             win.setText(translated)
             rect = self._paragraph_overlay_rect(paragraph)
+            available_height = max(24, self.height() - rect.y() - 4)
             win.setMinimumSize(0, 0)
-            win.setMaximumSize(rect.width(), self.height())
+            win.setMaximumSize(rect.width(), available_height)
             win.setFixedWidth(rect.width())
             win.adjustSize()
-            height = min(max(24, win.sizeHint().height()), self.height())
-            win.resize(rect.width(), height)
-            win.move(rect.x(), rect.y())
+            height = min(max(24, win.sizeHint().height()), available_height)
+            win.setGeometry(rect.x(), rect.y(), rect.width(), height)
 
     def _show_single_subtitle(self, text: str):
         self._sync_paragraph_subtitle_wins(0)
         for win in self._subtitle_paragraph_wins:
             win.hide()
+
+        if self._subtitle_mode == self.OVERLAY_OVER:
+            if self._subtitle_win is not None:
+                self._subtitle_win.hide()
+            win = self._ensure_single_inbox_subtitle_win()
+            win.setText(text)
+            self._apply_over_subtitle_style(win)
+            self._layout_single_inbox_subtitle()
+            win.show()
+            win.raise_()
+            return
+
+        if self._subtitle_inbox_win is not None:
+            self._subtitle_inbox_win.hide()
         win = self._ensure_single_subtitle_win()
         win.setText(text)
-        self._apply_single_subtitle_style()
-        self._layout_single_subtitle()
+        self._apply_below_subtitle_style(win)
+        self._layout_single_detached_subtitle()
         win.show()
         win.raise_()
 
     def _show_paragraph_subtitles(self):
         if self._subtitle_win is not None:
             self._subtitle_win.hide()
+        if self._subtitle_inbox_win is not None:
+            self._subtitle_inbox_win.hide()
         self._layout_paragraph_subtitles()
         for win in self._subtitle_paragraph_wins:
             win.show()
@@ -306,6 +420,9 @@ class TranslationBox(QWidget):
         if self._subtitle_win is not None:
             self._subtitle_win.close()
             self._subtitle_win = None
+        if self._subtitle_inbox_win is not None:
+            self._subtitle_inbox_win.close()
+            self._subtitle_inbox_win = None
         for win in self._subtitle_paragraph_wins:
             win.close()
         self._subtitle_paragraph_wins = []
@@ -347,12 +464,46 @@ class TranslationBox(QWidget):
             """
         )
 
+    def _update_pin_button(self):
+        if self._position_locked:
+            self._btn_pin.setText("📍")
+            self._btn_pin.setStyleSheet(
+                """
+                QPushButton {
+                    background: rgba(80,140,255,180); color: white;
+                    border: none; border-radius: 3px; font-size: 11px;
+                }
+                QPushButton:hover { background: rgba(100,160,255,200); }
+                """
+            )
+            return
+
+        self._btn_pin.setText("钉")
+        self._btn_pin.setStyleSheet(
+            """
+            QPushButton {
+                background: rgba(30,30,40,180); color: white;
+                border: none; border-radius: 3px; font-size: 11px;
+            }
+            QPushButton:hover { background: rgba(70,70,100,220); }
+            """
+        )
+
     def _on_toggle_pin(self):
-        self.set_mode(self.MODE_FIXED if self.mode == self.MODE_TEMP else self.MODE_TEMP)
+        self.set_position_locked(not self._position_locked)
+
+    def set_position_locked(self, locked: bool):
+        self._position_locked = bool(locked)
+        self._drag_pos = QPoint()
+        if self._position_locked:
+            self._dismiss_timer.stop()
+        elif self.mode == self.MODE_TEMP and self.isVisible():
+            self.start_dismiss_timer()
+        self._update_pin_button()
+        self.update()
 
     def set_mode(self, mode: str):
         self.mode = mode
-        self._btn_pin.setText("📍" if mode == self.MODE_FIXED else "钉")
         if mode == self.MODE_FIXED:
             self._dismiss_timer.stop()
         else:
@@ -374,7 +525,9 @@ class TranslationBox(QWidget):
 
     def refresh_overlay_style(self):
         if self._subtitle_win is not None:
-            self._apply_single_subtitle_style()
+            self._apply_below_subtitle_style(self._subtitle_win)
+        if self._subtitle_inbox_win is not None:
+            self._apply_over_subtitle_style(self._subtitle_inbox_win)
         for win in self._subtitle_paragraph_wins:
             self._apply_paragraph_subtitle_style(win)
         if self._subtitle_active:
@@ -393,7 +546,7 @@ class TranslationBox(QWidget):
         self._ocr_label.setText(short)
 
     def start_dismiss_timer(self):
-        if self.mode == self.MODE_TEMP:
+        if self.mode == self.MODE_TEMP and not self._position_locked:
             ms = self.settings.get("temp_box_timeout", 3) * 1000
             self._dismiss_timer.start(ms)
 
@@ -430,14 +583,23 @@ class TranslationBox(QWidget):
             self.show_subtitle(self._last_translation)
 
     def _on_dismiss_timeout(self):
-        if self.mode == self.MODE_TEMP:
+        if self.mode == self.MODE_TEMP and not self._position_locked:
             self.close_requested.emit(self)
 
+    def _box_global_rect(self) -> QRect:
+        return QRect(self.x(), self.y(), self.width(), self.height())
+
+    def _refresh_toolbar_visibility(self, global_pos=None):
+        if global_pos is None:
+            global_pos = QCursor.pos()
+        visible = self.isVisible() and self._box_global_rect().contains(global_pos)
+        self._btn_bar.setVisible(visible)
+
     def enterEvent(self, event):
-        self._btn_bar.setVisible(True)
+        self._refresh_toolbar_visibility()
 
     def leaveEvent(self, event):
-        self._btn_bar.setVisible(False)
+        self._refresh_toolbar_visibility()
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -445,7 +607,7 @@ class TranslationBox(QWidget):
         painter.fillRect(self.rect(), QColor(0, 0, 0, 4))
         border_color = (
             QColor(80, 160, 255, 200)
-            if self.mode == self.MODE_FIXED
+            if self.mode == self.MODE_FIXED or self._position_locked
             else QColor(220, 220, 255, 160)
         )
         pen = QPen(border_color, 1, Qt.DashLine)
@@ -453,10 +615,16 @@ class TranslationBox(QWidget):
         painter.drawRect(0, 0, self.width() - 1, self.height() - 1)
 
     def mousePressEvent(self, event):
+        if self._position_locked:
+            self._drag_pos = QPoint()
+            return
         if event.button() == Qt.LeftButton:
             self._drag_pos = event.globalPos() - self.frameGeometry().topLeft()
 
     def mouseMoveEvent(self, event):
+        self._refresh_toolbar_visibility(event.globalPos())
+        if self._position_locked:
+            return
         if event.buttons() == Qt.LeftButton and not self._drag_pos.isNull():
             new_pos = event.globalPos() - self._drag_pos
             self.move(new_pos)
@@ -464,23 +632,30 @@ class TranslationBox(QWidget):
 
     def moveEvent(self, event):
         super().moveEvent(event)
+        self._refresh_toolbar_visibility()
         if self._subtitle_active:
             self._layout_subtitles()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        self._refresh_toolbar_visibility()
         if self._subtitle_active:
             self.refresh_overlay_style()
 
     def hideEvent(self, event):
         super().hideEvent(event)
+        self._hover_timer.stop()
+        self._btn_bar.setVisible(False)
         self._hide_all_subtitles()
 
     def showEvent(self, event):
         super().showEvent(event)
+        self._hover_timer.start()
+        self._refresh_toolbar_visibility()
         if self._subtitle_active:
             self._layout_subtitles()
 
     def closeEvent(self, event):
+        self._hover_timer.stop()
         self._close_all_subtitles()
         super().closeEvent(event)

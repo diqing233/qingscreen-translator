@@ -2,7 +2,7 @@ import os
 import sys
 from unittest.mock import MagicMock
 
-from PyQt5.QtCore import QRect
+from PyQt5.QtCore import QPoint, QRect, Qt
 from PyQt5.QtWidgets import QApplication
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -32,6 +32,15 @@ def _set_paragraph_overlay_data(box):
         {'text': 'para 2', 'rect': {'x': 20, 'y': 38, 'width': 90, 'height': 16}},
     ]
     box._last_paragraph_translations = ['第一段', '第二段']
+
+
+def _has_opaque_pixel(widget):
+    image = widget.grab().toImage()
+    for y in range(image.height()):
+        for x in range(image.width()):
+            if image.pixelColor(x, y).alpha() > 0:
+                return True
+    return False
 
 
 def test_subtitle_win_initially_none():
@@ -85,9 +94,10 @@ def test_overlay_mode_over_without_paragraph_data_uses_single_fallback_bar():
     box.set_overlay_mode('over')
     box.show_subtitle('short text')
 
-    sw = box._subtitle_win
+    sw = box._subtitle_inbox_win
     assert sw is not None
     assert sw.isVisible()
+    assert sw.parent() is box
     assert box._subtitle_paragraph_wins == []
 
 
@@ -100,8 +110,9 @@ def test_overlay_mode_over_uses_paragraph_bars_when_data_exists():
 
     assert len(box._subtitle_paragraph_wins) == 2
     assert all(win.isVisible() for win in box._subtitle_paragraph_wins)
-    assert box._subtitle_paragraph_wins[0].x() >= box.x() + 10
-    assert box._subtitle_paragraph_wins[1].y() >= box.y() + 38
+    assert all(win.parent() is box for win in box._subtitle_paragraph_wins)
+    assert box._subtitle_paragraph_wins[0].x() >= 10
+    assert box._subtitle_paragraph_wins[1].y() >= 38
 
 
 def test_overlay_mode_over_uses_dark_backdrop():
@@ -110,7 +121,7 @@ def test_overlay_mode_over_uses_dark_backdrop():
     box.set_overlay_mode('over')
     box.show_subtitle('short text')
 
-    style = box._subtitle_win.styleSheet()
+    style = box._subtitle_inbox_win.styleSheet()
     assert 'background: rgba(6, 10, 16, 244);' in style
     assert 'border: 1px solid rgba(150, 190, 235, 110);' in style
 
@@ -123,6 +134,90 @@ def test_overlay_mode_below_uses_dark_backdrop():
     style = box._subtitle_win.styleSheet()
     assert 'background: rgba(6, 10, 16, 232);' in style
     assert 'border: 1px solid rgba(120, 165, 230, 90);' in style
+
+
+def test_single_overlay_window_is_mouse_transparent():
+    box, _ = _make_box(overlay_default_mode='below')
+    box.show()
+    box.show_subtitle('hover passthrough')
+
+    assert box._subtitle_win.testAttribute(Qt.WA_TransparentForMouseEvents)
+
+
+def test_paragraph_overlay_windows_are_mouse_transparent():
+    box, _ = _make_box()
+    box.show()
+    _set_paragraph_overlay_data(box)
+    box.set_overlay_mode('over')
+    box.show_subtitle('full translation')
+
+    assert all(win.testAttribute(Qt.WA_TransparentForMouseEvents) for win in box._subtitle_paragraph_wins)
+
+
+def test_overlay_window_grab_contains_visible_backdrop_pixels():
+    box, _ = _make_box(overlay_default_mode='over')
+    box.show()
+    box.show_subtitle('over mode')
+    _app.processEvents()
+
+    assert _has_opaque_pixel(box._subtitle_inbox_win)
+
+
+def test_toolbar_visibility_uses_original_box_geometry():
+    box, _ = _make_box()
+    box.show()
+    box.set_overlay_mode('over')
+    box.show_subtitle('hover text')
+
+    box._refresh_toolbar_visibility(QPoint(box.x() + 10, box.y() + 35))
+    assert box._btn_bar.isVisible()
+
+    box._refresh_toolbar_visibility(QPoint(box.x() - 10, box.y() - 10))
+    assert not box._btn_bar.isVisible()
+
+
+def test_below_overlay_area_outside_box_does_not_keep_toolbar_visible():
+    box, _ = _make_box(overlay_default_mode='below')
+    box.show()
+    box.show_subtitle('below mode')
+
+    box._refresh_toolbar_visibility(QPoint(box.x() + 20, box.y() + box.height() + 10))
+
+    assert not box._btn_bar.isVisible()
+
+
+def test_pin_button_locks_current_box_position():
+    box, _ = _make_box()
+    box.show()
+    initial_pos = box.pos()
+
+    press_event = MagicMock()
+    press_event.button.return_value = Qt.LeftButton
+    press_event.globalPos.return_value = QPoint(box.x() + 10, box.y() + 10)
+
+    move_event = MagicMock()
+    move_event.buttons.return_value = Qt.LeftButton
+    move_event.globalPos.return_value = QPoint(box.x() + 80, box.y() + 60)
+
+    box._on_toggle_pin()
+    box.mousePressEvent(press_event)
+    box.mouseMoveEvent(move_event)
+
+    assert getattr(box, '_position_locked', False) is True
+    assert box.pos() == initial_pos
+
+
+def test_locked_temp_box_does_not_emit_close_on_dismiss_timeout():
+    box, _ = _make_box()
+    box.show()
+    box.set_mode('temp')
+    closed = []
+    box.close_requested.connect(lambda current: closed.append(current))
+
+    box._on_toggle_pin()
+    box._on_dismiss_timeout()
+
+    assert closed == []
 
 
 def test_subtitle_follows_box_on_move():
@@ -146,20 +241,21 @@ def test_paragraph_subtitles_follow_box_on_move():
 
     box.move(300, 200)
 
-    assert box._subtitle_paragraph_wins[0].x() >= 310
-    assert box._subtitle_paragraph_wins[0].y() >= 208
+    top_left = box._subtitle_paragraph_wins[0].mapToGlobal(QPoint(0, 0))
+    assert top_left.x() >= 310
+    assert top_left.y() >= 208
 
 
 def test_overlay_font_delta_updates_font_size():
     box, values = _make_box(overlay_default_mode='over')
     box.show()
     box.show_subtitle('font test')
-    initial_size = box._subtitle_win.font().pixelSize()
+    initial_size = box._subtitle_inbox_win.font().pixelSize()
 
     values['overlay_font_delta'] = 4
     box.refresh_overlay_style()
 
-    assert box._subtitle_win.font().pixelSize() > initial_size
+    assert box._subtitle_inbox_win.font().pixelSize() > initial_size
 
 
 def test_overlay_default_font_size_stays_compact_for_paragraph_boxes():
@@ -167,7 +263,7 @@ def test_overlay_default_font_size_stays_compact_for_paragraph_boxes():
     box.show()
     box.show_subtitle('paragraph overlay')
 
-    assert 12 <= box._subtitle_win.font().pixelSize() <= 18
+    assert 12 <= box._subtitle_inbox_win.font().pixelSize() <= 18
 
 
 def test_overlay_controls_live_in_translation_box_toolbar():

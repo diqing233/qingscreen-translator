@@ -53,15 +53,20 @@ def test_stop_clear_button_is_placed_after_play_button():
     assert layout.indexOf(bar._btn_stop_clear) < layout.indexOf(bar._btn_reset_size)
 
 
-def test_toolbar_width_refreshes_when_toggle_becomes_visible():
+def test_toolbar_width_refreshes_when_toggle_visibility_changes():
     bar = _make_bar()
     content = bar._tb_scroll.widget()
-    initial_width = content.geometry().width()
+    fixed_width = content.geometry().width()
+
+    bar._on_mode_btn_click('temp')
+    _app.processEvents()
+    temp_width = content.geometry().width()
 
     bar._on_mode_btn_click('fixed')
     _app.processEvents()
 
-    assert content.geometry().width() > initial_width
+    assert temp_width < fixed_width
+    assert content.geometry().width() == fixed_width
 
 
 def test_default_width_fits_toolbar_in_fixed_mode():
