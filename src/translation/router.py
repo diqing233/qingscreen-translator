@@ -12,17 +12,28 @@ class TranslationRouter:
     def _init_backends(self):
         from translation.dictionary import DictionaryBackend
         from translation.google_trans import GoogleBackend
+        from translation.youdao_trans import YoudaoBackend
+        from translation.sogou_trans import SogouBackend
+        from translation.bing_trans import BingBackend
         from translation.baidu_trans import BaiduBackend
         from translation.deepl_trans import DeepLBackend
         from translation.ai_trans import AIBackend
 
         keys = self._settings.get('api_keys', {})
         self._backends['dictionary'] = DictionaryBackend()
-        self._backends['google'] = GoogleBackend()
-        self._backends['baidu'] = BaiduBackend(keys.get('baidu_appid', ''), keys.get('baidu_key', ''))
+        self._backends['google']     = GoogleBackend()
+        self._backends['youdao']     = YoudaoBackend()
+        self._backends['sogou']      = SogouBackend()
+        self._backends['bing']       = BingBackend()
+        self._backends['baidu']      = BaiduBackend(keys.get('baidu_appid', ''), keys.get('baidu_key', ''))
         self._backends['deepl'] = DeepLBackend(keys.get('deepl_key', ''))
         for provider in ('deepseek', 'openai', 'claude', 'zhipu', 'siliconflow', 'moonshot'):
             self._backends[provider] = AIBackend(provider=provider, api_key=keys.get(f'{provider}_key', ''))
+
+        # Bing 已启用时提前在后台获取 token
+        enabled = set(self._settings.get('enabled_backends', []))
+        if 'bing' in enabled:
+            self._backends['bing'].prefetch()
 
     def reload(self):
         self._init_backends()
@@ -51,7 +62,7 @@ class TranslationRouter:
                 logger.warning(f'Backend {name} failed: {e}')
 
         # 所有启用后端均无结果时，用谷歌翻译兜底（若用户未禁用且尚未尝试）
-        if 'google' not in enabled:
+        if 'google' in enabled and not google_in_order:
             backend = self._backends.get('google')
             if backend:
                 try:

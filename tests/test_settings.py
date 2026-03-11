@@ -17,6 +17,10 @@ def test_default_values():
     assert store.get('hotkey_explain') == 'alt+e'
     assert isinstance(store.get('translation_order'), list)
 
+def test_default_enabled_backends_exclude_bing():
+    store = make_store()
+    assert 'bing' not in store.get('enabled_backends')
+
 def test_set_and_persist():
     f = tempfile.NamedTemporaryFile(suffix='.json', delete=False)
     f.close()
@@ -38,6 +42,11 @@ def test_default_close_button_behavior_is_ask():
     store = make_store()
     assert store.get('close_button_behavior') == 'ask'
 
+def test_default_overlay_settings():
+    store = make_store()
+    assert store.get('overlay_default_mode') == 'off'
+    assert store.get('overlay_font_delta') == 0
+
 def test_close_button_behavior_persists():
     f = tempfile.NamedTemporaryFile(suffix='.json', delete=False)
     f.close()
@@ -45,3 +54,13 @@ def test_close_button_behavior_persists():
     store.set('close_button_behavior', 'tray')
     store2 = SettingsStore(f.name)
     assert store2.get('close_button_behavior') == 'tray'
+
+def test_overlay_settings_persist():
+    f = tempfile.NamedTemporaryFile(suffix='.json', delete=False)
+    f.close()
+    store = SettingsStore(f.name)
+    store.set('overlay_default_mode', 'below')
+    store.set('overlay_font_delta', 3)
+    store2 = SettingsStore(f.name)
+    assert store2.get('overlay_default_mode') == 'below'
+    assert store2.get('overlay_font_delta') == 3

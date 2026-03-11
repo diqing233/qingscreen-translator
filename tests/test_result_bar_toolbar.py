@@ -11,17 +11,21 @@ _app = QApplication.instance() or QApplication(sys.argv)
 
 def _make_settings():
     settings = MagicMock()
+    values = {
+        'source_language': 'auto',
+        'target_language': 'zh-CN',
+        'result_bar_position': 'top',
+        'result_bar_opacity': 0.85,
+        'overlay_default_mode': 'off',
+        'overlay_font_delta': 0,
+    }
 
     def get_value(key, default=None):
-        values = {
-            'source_language': 'auto',
-            'target_language': 'zh-CN',
-            'result_bar_position': 'top',
-            'result_bar_opacity': 0.85,
-        }
         return values.get(key, default)
 
     settings.get.side_effect = get_value
+    settings.set.side_effect = lambda key, value: values.__setitem__(key, value)
+    settings._values = values
     return settings
 
 
@@ -74,3 +78,55 @@ def test_language_buttons_reserve_enough_width_for_labels():
 
     assert bar._btn_src_lang.minimumWidth() >= bar._btn_src_lang.sizeHint().width()
     assert bar._btn_tgt_lang.minimumWidth() >= bar._btn_tgt_lang.sizeHint().width()
+
+
+def test_overlay_button_cycles_modes():
+    bar = _make_bar()
+
+    assert bar._overlay_mode == 'off'
+
+    bar._btn_overlay.click()
+    _app.processEvents()
+    assert bar._overlay_mode == 'over'
+
+    bar._btn_overlay.click()
+    _app.processEvents()
+    assert bar._overlay_mode == 'below'
+
+    bar._btn_overlay.click()
+    _app.processEvents()
+    assert bar._overlay_mode == 'off'
+
+
+def test_overlay_font_buttons_adjust_settings():
+    bar = _make_bar()
+
+    bar._btn_overlay_font_up.click()
+    _app.processEvents()
+    assert bar.settings._values['overlay_font_delta'] == 1
+
+    bar._btn_overlay_font_down.click()
+    _app.processEvents()
+    assert bar.settings._values['overlay_font_delta'] == 0
+
+
+def test_box_mode_cycle_button_rotates_modes():
+    bar = _make_bar()
+
+    assert bar._box_mode == 'temp'
+    assert bar._btn_box_mode_cycle.text() == '临时'
+
+    bar._btn_box_mode_cycle.click()
+    _app.processEvents()
+    assert bar._box_mode == 'fixed'
+    assert bar._btn_box_mode_cycle.text() == '固定'
+
+    bar._btn_box_mode_cycle.click()
+    _app.processEvents()
+    assert bar._box_mode == 'multi'
+    assert bar._btn_box_mode_cycle.text() == '多框'
+
+    bar._btn_box_mode_cycle.click()
+    _app.processEvents()
+    assert bar._box_mode == 'temp'
+    assert bar._btn_box_mode_cycle.text() == '临时'

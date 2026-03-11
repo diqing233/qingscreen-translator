@@ -1,21 +1,46 @@
 import sys
 import os
 import logging
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 LOG_DIR = os.path.expanduser('~/.screen_translator')
 os.makedirs(LOG_DIR, exist_ok=True)
 
+def _build_log_handlers():
+    handlers = [logging.StreamHandler()]
+    warnings = []
+    primary_log_path = os.path.join(LOG_DIR, 'app.log')
+
+    try:
+        handlers.append(logging.FileHandler(primary_log_path, encoding='utf-8'))
+        return handlers, warnings
+    except OSError as exc:
+        warnings.append(f'无法写入日志文件 {primary_log_path}，将尝试使用临时日志文件: {exc}')
+
+    fallback_dir = os.path.join(tempfile.gettempdir(), 'screen_translator')
+    fallback_log_path = os.path.join(fallback_dir, f'app-{os.getpid()}.log')
+    try:
+        os.makedirs(fallback_dir, exist_ok=True)
+        handlers.append(logging.FileHandler(fallback_log_path, encoding='utf-8'))
+        warnings.append(f'已切换到临时日志文件: {fallback_log_path}')
+    except OSError as exc:
+        warnings.append(f'临时日志文件也不可用，将只输出到控制台: {exc}')
+
+    return handlers, warnings
+
+
+_handlers, _startup_log_warnings = _build_log_handlers()
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s %(levelname)s %(name)s: %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler(os.path.join(LOG_DIR, 'app.log'), encoding='utf-8'),
-    ]
+    handlers=_handlers,
 )
 logger = logging.getLogger(__name__)
+for _warning in _startup_log_warnings:
+    logger.warning(_warning)
 
 # !! CRITICAL: onnxruntime must be loaded BEFORE any PyQt5 import.
 # On Windows, Qt DLL initialization breaks onnxruntime (WinError 1114).

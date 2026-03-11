@@ -154,3 +154,26 @@ def test_settings_window_loads_and_saves_close_button_behavior():
 
     reloaded = SettingsStore(temp.name)
     assert reloaded.get('close_button_behavior') == 'quit'
+
+
+def test_settings_window_loads_and_saves_overlay_settings():
+    from ui.settings_window import SettingsWindow
+
+    temp = tempfile.NamedTemporaryFile(suffix='.json', delete=False)
+    temp.close()
+    store = SettingsStore(temp.name)
+    store.set('overlay_default_mode', 'below')
+    store.set('overlay_font_delta', 3)
+
+    win = SettingsWindow(store)
+    assert win._combo_overlay_default_mode.currentData() == 'below'
+    assert win._spin_overlay_font_delta.value() == 3
+
+    idx = win._combo_overlay_default_mode.findData('over')
+    win._combo_overlay_default_mode.setCurrentIndex(idx)
+    win._spin_overlay_font_delta.setValue(6)
+    win._save()
+
+    reloaded = SettingsStore(temp.name)
+    assert reloaded.get('overlay_default_mode') == 'over'
+    assert reloaded.get('overlay_font_delta') == 6

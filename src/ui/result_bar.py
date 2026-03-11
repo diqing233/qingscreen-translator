@@ -12,6 +12,21 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_W, DEFAULT_H = 760, 140
 
+BOX_MODE_ORDER = ['temp', 'fixed', 'multi']
+BOX_MODE_META = {
+    'temp': ('临时', '临时翻译：框选后立即翻译，N 秒后自动消失'),
+    'fixed': ('固定', '固定翻译：框保留在屏幕上，可手动或自动翻译'),
+    'multi': ('多框', '多框翻译：可在屏幕上放置多个独立翻译框'),
+    'ai': ('AI框', 'AI 框选：框选后直接进行 AI 解释，不走翻译'),
+}
+
+OVERLAY_MODE_ORDER = ['off', 'over', 'below']
+OVERLAY_MODE_META = {
+    'off': '覆盖翻译：关闭',
+    'over': '覆盖翻译：显示在原文上',
+    'below': '覆盖翻译：显示在原文下方',
+}
+
 BOX_MODES = [
     ('temp',  '临时', '临时翻译：框选后立即翻译，N秒后自动消失'),
     ('fixed', '固定', '固定翻译：框保留在屏幕上，可手动或自动翻译'),
@@ -150,11 +165,12 @@ class ResultBar(QWidget):
     history_requested         = pyqtSignal()
     settings_requested        = pyqtSignal()
     close_requested           = pyqtSignal()
-    overlay_requested         = pyqtSignal(str)   # carries current translated text
+    overlay_requested         = pyqtSignal(str, str)   # mode, current translated text
     box_mode_changed          = pyqtSignal(str)   # 'temp'|'fixed'|'multi'|'ai'
     translate_mode_changed    = pyqtSignal(str)   # 'manual'|'auto'
     target_language_changed   = pyqtSignal(str)
     source_language_changed   = pyqtSignal(str)
+    overlay_font_delta_changed = pyqtSignal(int)
 
     def __init__(self, settings, parent=None):
         super().__init__(parent)
@@ -164,7 +180,7 @@ class ResultBar(QWidget):
         self._minimized = False
         self._drag_pos = QPoint()
         self._box_mode = 'temp'
-        self._overlay_active = False
+        self._overlay_mode = self.settings.get('overlay_default_mode', 'off')
         self._translation_busy = False
         self._translate_mode = 'manual'
         self._hidden_to_tray = False
@@ -291,11 +307,13 @@ class ResultBar(QWidget):
         tb.addSpacing(4)
 
         # 左侧模式按钮
-        self._mode_btns = {}
-        for key, label, tip in BOX_MODES:
-            btn = self._mode_btn(label, tip, key)
-            self._mode_btns[key] = btn
-            tb.addWidget(btn)
+        self._btn_box_mode_cycle = self._mode_btn(*BOX_MODE_META['temp'], 'temp')
+        self._btn_box_mode_cycle.clicked.disconnect()
+        self._btn_box_mode_cycle.clicked.connect(self._cycle_box_mode)
+        tb.addWidget(self._btn_box_mode_cycle)
+
+        self._btn_ai_mode = self._mode_btn(*BOX_MODE_META['ai'], 'ai')
+        tb.addWidget(self._btn_ai_mode)
 
         tb.addSpacing(6)
 
@@ -333,6 +351,14 @@ class ResultBar(QWidget):
         # 覆盖按钮（放在工具栏内，随内容滚动）
         self._btn_overlay = self._icon_btn('⊞', '覆盖译文到原文区域', self._on_overlay)
         tb.addWidget(self._btn_overlay)
+        self._btn_overlay_font_down = self._small_toolbar_btn(
+            'A-', '减小覆盖译文字号', lambda: self._adjust_overlay_font_delta(-1)
+        )
+        tb.addWidget(self._btn_overlay_font_down)
+        self._btn_overlay_font_up = self._small_toolbar_btn(
+            'A+', '增大覆盖译文字号', lambda: self._adjust_overlay_font_delta(1)
+        )
+        tb.addWidget(self._btn_overlay_font_up)
 
         tb.addSpacing(6)
 
@@ -377,7 +403,8 @@ class ResultBar(QWidget):
         cl.addLayout(_tb_row)
         self.set_stop_clear_busy(False)
         self._refresh_toolbar_layout()
-        self._set_active_mode_btn('temp')
+        self._set_active_mode_btn(self._box_mode)
+        self._refresh_overlay_button()
 
         # 分隔线
         sep = QWidget()
@@ -506,6 +533,21 @@ class ResultBar(QWidget):
         btn.setMinimumWidth(36)
         btn.setStyleSheet(self._mode_btn_style(False))
         btn.clicked.connect(lambda _, k=key: self._on_mode_btn_click(k))
+        return btn
+
+    def _small_toolbar_btn(self, label: str, tip: str, callback) -> QPushButton:
+        btn = QPushButton(label)
+        btn.setToolTip(tip)
+        btn.setFixedSize(26, 22)
+        btn.setStyleSheet('''
+            QPushButton {
+                background: rgba(50,50,65,180); color: rgba(200,200,210,220);
+                border: 1px solid rgba(255,255,255,15);
+                border-radius: 4px; font-size: 10px; font-weight: bold;
+            }
+            QPushButton:hover { background: rgba(70,70,95,220); color: white; }
+        ''')
+        btn.clicked.connect(callback)
         return btn
 
     def _mode_btn_style(self, active: bool) -> str:
@@ -656,9 +698,15 @@ class ResultBar(QWidget):
     # ── 模式切换 ──────────────────────────────────────────────────
 
     def _set_active_mode_btn(self, key: str):
-        for k, btn in self._mode_btns.items():
-            btn.setChecked(k == key)
-            btn.setStyleSheet(self._mode_btn_style(k == key))
+        cycle_active = key in BOX_MODE_ORDER
+        self._btn_box_mode_cycle.setChecked(cycle_active)
+        self._btn_box_mode_cycle.setStyleSheet(self._mode_btn_style(cycle_active))
+        if cycle_active:
+            self._btn_box_mode_cycle.setText(BOX_MODE_META[key][0])
+
+        ai_active = key == 'ai'
+        self._btn_ai_mode.setChecked(ai_active)
+        self._btn_ai_mode.setStyleSheet(self._mode_btn_style(ai_active))
 
     def _on_mode_btn_click(self, key: str):
         self._box_mode = key
@@ -667,6 +715,13 @@ class ResultBar(QWidget):
         self._refresh_toolbar_layout()
         self.box_mode_changed.emit(key)
         self._smart_adjust()
+
+    def _cycle_box_mode(self):
+        try:
+            index = BOX_MODE_ORDER.index(self._box_mode)
+        except ValueError:
+            index = -1
+        self._on_mode_btn_click(BOX_MODE_ORDER[(index + 1) % len(BOX_MODE_ORDER)])
 
     def _on_toggle_changed(self, is_auto: bool):
         self._translate_mode = 'auto' if is_auto else 'manual'
@@ -705,6 +760,7 @@ class ResultBar(QWidget):
             self._manual_size = False
             self.resize(DEFAULT_W, DEFAULT_H)
             self._manual_size = True
+        self.set_overlay_mode(self.settings.get('overlay_default_mode', 'off'))
         self._position_window()
 
     def mark_hidden_to_tray(self, hidden: bool):
@@ -814,25 +870,45 @@ class ResultBar(QWidget):
         self.resize(DEFAULT_W, DEFAULT_H)
         self._manual_size = True
 
-    def _on_overlay(self):
-        text = ''
-        if self._current_result:
-            text = self._current_result.get('translated', '')
-        self._overlay_active = not self._overlay_active
-        if self._overlay_active:
-            self._btn_overlay.setStyleSheet('''
-                QPushButton { background: rgba(80,140,255,180); color: white;
-                              border: none; font-size: 12px; border-radius: 3px; }
-                QPushButton:hover { color: white; background: rgba(100,160,255,200); }
-            ''')
-        else:
+    def _refresh_overlay_button(self):
+        self._btn_overlay.setToolTip(OVERLAY_MODE_META.get(self._overlay_mode, OVERLAY_MODE_META['off']))
+        if self._overlay_mode == 'off':
             self._btn_overlay.setStyleSheet('''
                 QPushButton { background: transparent; color: rgba(160,160,180,200);
                               border: none; font-size: 12px; }
                 QPushButton:hover { color: white; background: rgba(255,255,255,15);
                                     border-radius: 3px; }
             ''')
-        self.overlay_requested.emit(text)
+            return
+        self._btn_overlay.setStyleSheet('''
+            QPushButton { background: rgba(80,140,255,180); color: white;
+                          border: none; font-size: 12px; border-radius: 3px; }
+            QPushButton:hover { color: white; background: rgba(100,160,255,200); }
+        ''')
+
+    def set_overlay_mode(self, mode: str, emit_signal: bool = False):
+        if mode not in OVERLAY_MODE_ORDER:
+            mode = 'off'
+        self._overlay_mode = mode
+        self._refresh_overlay_button()
+        if emit_signal:
+            text = ''
+            if self._current_result:
+                text = self._current_result.get('translated', '')
+            self.overlay_requested.emit(self._overlay_mode, text)
+
+    def _adjust_overlay_font_delta(self, delta: int):
+        value = int(self.settings.get('overlay_font_delta', 0)) + delta
+        self.settings.set('overlay_font_delta', value)
+        self.overlay_font_delta_changed.emit(value)
+
+    def _on_overlay(self):
+        index = OVERLAY_MODE_ORDER.index(self._overlay_mode)
+        self.set_overlay_mode(OVERLAY_MODE_ORDER[(index + 1) % len(OVERLAY_MODE_ORDER)])
+        text = ''
+        if self._current_result:
+            text = self._current_result.get('translated', '')
+        self.overlay_requested.emit(self._overlay_mode, text)
 
     def _on_explain(self):
         if self._current_result is None:
@@ -914,3 +990,20 @@ class ResultBar(QWidget):
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.LeftButton:
             self._resizing = False
+
+    def apply_settings(self):
+        size_pref = self.settings.get('result_bar_size', 'default')
+        if size_pref == 'default':
+            self._manual_size = False
+            self.resize(DEFAULT_W, DEFAULT_H)
+            self._manual_size = True
+        self.set_overlay_mode(self.settings.get('overlay_default_mode', 'off'))
+        self._position_window()
+
+    def update_mode_tooltips(self, hk_temp: str, hk_fixed: str, hk_multi: str, hk_ai: str = 'alt+4'):
+        current_label = BOX_MODE_META.get(self._box_mode, BOX_MODE_META['temp'])[0]
+        self._btn_box_mode_cycle.setToolTip(
+            f'框模式循环切换（当前：{current_label}）'
+            f' [临时 {hk_temp} / 固定 {hk_fixed} / 多框 {hk_multi}]'
+        )
+        self._btn_ai_mode.setToolTip(f'{BOX_MODE_META["ai"][1]}  [{hk_ai}]')

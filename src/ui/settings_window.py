@@ -7,7 +7,8 @@ from PyQt5.QtCore import pyqtSignal, Qt
 
 BACKEND_LABELS = {
     'dictionary':   '📖 本地词典（离线极快）',
-    'google':       '🌐 谷歌翻译（免费）',
+    'bing':         '🔷 微软 Bing 翻译（免费，部分网络需梯子）',
+    'google':       '🌐 谷歌翻译（免费，需梯子）',
     'baidu':        '🔵 百度翻译',
     'deepl':        '🟢 DeepL',
     'zhipu':        '🆓 智谱 GLM-4-Flash（永久免费）',
@@ -16,6 +17,8 @@ BACKEND_LABELS = {
     'deepseek':     '🤖 DeepSeek AI',
     'openai':       '🤖 OpenAI GPT',
     'claude':       '🤖 Claude AI',
+    'sogou':        '🟠 搜狗翻译（免费，国内直连）',
+    'youdao':       '🟡 有道翻译（已封锁非官方调用，暂不可用）',
 }
 
 
@@ -76,6 +79,16 @@ class SettingsWindow(QDialog):
         self._combo_close_behavior.addItem('直接退出程序', 'quit')
         form.addRow('关闭按钮行为', self._combo_close_behavior)
 
+        self._combo_overlay_default_mode = QComboBox()
+        self._combo_overlay_default_mode.addItem('关闭', 'off')
+        self._combo_overlay_default_mode.addItem('覆盖在原文上', 'over')
+        self._combo_overlay_default_mode.addItem('显示在原文下方', 'below')
+        form.addRow('覆盖翻译默认模式', self._combo_overlay_default_mode)
+
+        self._spin_overlay_font_delta = QSpinBox()
+        self._spin_overlay_font_delta.setRange(-12, 24)
+        form.addRow('覆盖译文字号微调', self._spin_overlay_font_delta)
+
         self._edit_hotkey_select = QLineEdit()
         self._edit_hotkey_select.setPlaceholderText('如：alt+q')
         form.addRow('框选热键', self._edit_hotkey_select)
@@ -111,7 +124,9 @@ class SettingsWindow(QDialog):
         src_layout = QVBoxLayout(src_tab)
         tip = QLabel('💡 拖拽列表项可调整优先级，勾选则启用该后端。'
                      '本地词典仅适合单词速查，句子翻译效果较差；'
-                     '联网建议启用"谷歌翻译 + 智谱 GLM-4-Flash"免费组合，覆盖面广且无需付费。')
+                     '国内推荐优先启用"搜狗"；Bing 是否可用取决于网络环境。'
+                     '有道已封锁非官方调用，暂不可用。'
+                     '谷歌翻译在中国大陆需要梯子，可根据网络情况开启。')
         tip.setWordWrap(True)
         tip.setStyleSheet('color: #888; font-size: 11px; padding: 4px 0;')
         src_layout.addWidget(tip)
@@ -245,6 +260,13 @@ class SettingsWindow(QDialog):
         if idx >= 0:
             self._combo_close_behavior.setCurrentIndex(idx)
 
+        overlay_default_mode = self.settings.get('overlay_default_mode', 'off')
+        idx = self._combo_overlay_default_mode.findData(overlay_default_mode)
+        if idx >= 0:
+            self._combo_overlay_default_mode.setCurrentIndex(idx)
+
+        self._spin_overlay_font_delta.setValue(self.settings.get('overlay_font_delta', 0))
+
         self._edit_hotkey_select.setText(self.settings.get('hotkey_select', 'alt+q'))
         self._edit_hotkey_explain.setText(self.settings.get('hotkey_explain', 'alt+e'))
         self._edit_hotkey_toggle.setText(self.settings.get('hotkey_toggle_boxes', 'alt+w'))
@@ -261,7 +283,7 @@ class SettingsWindow(QDialog):
         for n in BACKEND_LABELS:
             if n not in order:
                 order.append(n)
-        enabled = set(self.settings.get('enabled_backends', ['dictionary', 'google']))
+        enabled = set(self.settings.get('enabled_backends', ['google', 'zhipu']))
         self._list_backends.clear()
         for name in order:
             item = QListWidgetItem(BACKEND_LABELS.get(name, name))
@@ -283,6 +305,8 @@ class SettingsWindow(QDialog):
         self.settings.set('result_bar_position', self._combo_pos.currentData())
         self.settings.set('result_bar_size', self._combo_size.currentData())
         self.settings.set('close_button_behavior', self._combo_close_behavior.currentData())
+        self.settings.set('overlay_default_mode', self._combo_overlay_default_mode.currentData())
+        self.settings.set('overlay_font_delta', self._spin_overlay_font_delta.value())
         self.settings.set('hotkey_select', self._edit_hotkey_select.text())
         self.settings.set('hotkey_explain', self._edit_hotkey_explain.text())
         self.settings.set('hotkey_toggle_boxes', self._edit_hotkey_toggle.text())
@@ -325,6 +349,10 @@ class SettingsWindow(QDialog):
         idx = self._combo_close_behavior.findData(DEFAULTS['close_button_behavior'])
         if idx >= 0:
             self._combo_close_behavior.setCurrentIndex(idx)
+        idx = self._combo_overlay_default_mode.findData(DEFAULTS['overlay_default_mode'])
+        if idx >= 0:
+            self._combo_overlay_default_mode.setCurrentIndex(idx)
+        self._spin_overlay_font_delta.setValue(DEFAULTS['overlay_font_delta'])
         self._edit_hotkey_select.setText(DEFAULTS['hotkey_select'])
         self._edit_hotkey_explain.setText(DEFAULTS['hotkey_explain'])
         self._edit_hotkey_toggle.setText(DEFAULTS['hotkey_toggle_boxes'])
@@ -332,6 +360,27 @@ class SettingsWindow(QDialog):
         self._edit_hotkey_mode_fixed.setText(DEFAULTS['hotkey_mode_fixed'])
         self._edit_hotkey_mode_multi.setText(DEFAULTS['hotkey_mode_multi'])
         self._edit_hotkey_mode_ai.setText(DEFAULTS['hotkey_mode_ai'])
+
+        order = DEFAULTS.get('translation_order', list(BACKEND_LABELS.keys()))
+        enabled = set(DEFAULTS.get('enabled_backends', []))
+        self._list_backends.clear()
+        for name in order:
+            if name not in BACKEND_LABELS:
+                continue
+            item = QListWidgetItem(BACKEND_LABELS.get(name, name))
+            item.setData(Qt.UserRole, name)
+            item.setCheckState(Qt.Checked if name in enabled else Qt.Unchecked)
+            self._list_backends.addItem(item)
+
+        for name in BACKEND_LABELS:
+            if name in order:
+                continue
+            item = QListWidgetItem(BACKEND_LABELS.get(name, name))
+            item.setData(Qt.UserRole, name)
+            item.setCheckState(Qt.Checked if name in enabled else Qt.Unchecked)
+            self._list_backends.addItem(item)
+
+        self._sync_dict_group_visibility()
 
     def _sync_dict_group_visibility(self):
         """根据"本地词典"是否勾选来显示/隐藏 ECDICT 分组框。"""

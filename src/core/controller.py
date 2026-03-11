@@ -76,6 +76,7 @@ class CoreController(QObject):
         self.result_bar.target_language_changed.connect(self._on_target_language_changed)
         self.result_bar.source_language_changed.connect(self._on_source_language_changed)
         self.result_bar.overlay_requested.connect(self._on_overlay_requested)
+        self.result_bar.overlay_font_delta_changed.connect(self._refresh_overlay_font_styles)
         self.tray.show_main_requested.connect(self._restore_main_window)
         self.tray.select_triggered.connect(self._sig_start_selection)
         self.tray.settings_triggered.connect(self._show_settings)
@@ -383,7 +384,8 @@ class CoreController(QObject):
 
         # 若该框字幕已激活，刷新字幕内容
         translated = result.get('translated', '')
-        if getattr(box, '_subtitle_active', False) and translated:
+        overlay_mode = getattr(box, '_subtitle_mode', 'off')
+        if translated and (getattr(box, '_subtitle_active', False) or overlay_mode != 'off'):
             box.show_subtitle(translated)
 
         if box.mode == 'temp':
@@ -480,7 +482,29 @@ class CoreController(QObject):
             self._settings_win.settings_saved.connect(self.result_bar.refresh_opacity)
             self._settings_win.settings_saved.connect(self.result_bar.apply_settings)
             self._settings_win.settings_saved.connect(self._reload_hotkeys)
+            self._settings_win.settings_saved.connect(self._refresh_overlay_font_styles)
             self._settings_win.show()
         else:
             self._settings_win.activateWindow()
             self._settings_win.raise_()
+
+    def _on_overlay_requested(self, mode: str, text: str):
+        boxes = list(self.box_manager._boxes.values())
+        if not boxes:
+            return
+        for box in boxes:
+            box.set_overlay_mode(mode)
+            if mode == 'off':
+                box.hide_subtitle()
+                continue
+
+            result = self._multi_results.get(box.box_id)
+            translated = result.get('translated', '') if result else text
+            if translated:
+                box.show_subtitle(translated)
+
+    def _refresh_overlay_font_styles(self, _value=None):
+        boxes = getattr(self.box_manager, '_boxes', {}).values()
+        for box in boxes:
+            if hasattr(box, 'refresh_overlay_style'):
+                box.refresh_overlay_style()

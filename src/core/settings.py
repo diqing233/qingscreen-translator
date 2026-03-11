@@ -18,7 +18,9 @@ DEFAULTS = {
     'result_bar_position': 'right',
     'result_bar_size': 'default',
     'close_button_behavior': 'ask',
-    'translation_order': ['dictionary', 'google', 'baidu', 'deepl', 'zhipu', 'siliconflow', 'moonshot', 'deepseek', 'openai', 'claude'],
+    'overlay_default_mode': 'off',
+    'overlay_font_delta': 0,
+    'translation_order': ['dictionary', 'bing', 'google', 'baidu', 'deepl', 'zhipu', 'siliconflow', 'moonshot', 'deepseek', 'openai', 'claude', 'sogou', 'youdao'],
     'enabled_backends': ['google', 'zhipu'],
     'api_keys': {
         'baidu_appid': '',
