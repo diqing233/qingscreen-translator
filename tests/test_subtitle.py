@@ -26,6 +26,14 @@ def _make_box(overlay_default_mode='off', overlay_font_delta=0):
     return box, values
 
 
+def _set_paragraph_overlay_data(box):
+    box._last_ocr_paragraphs = [
+        {'text': 'para 1', 'rect': {'x': 10, 'y': 8, 'width': 70, 'height': 16}},
+        {'text': 'para 2', 'rect': {'x': 20, 'y': 38, 'width': 90, 'height': 16}},
+    ]
+    box._last_paragraph_translations = ['第一段', '第二段']
+
+
 def test_subtitle_win_initially_none():
     box, _ = _make_box()
     assert box._subtitle_win is None
@@ -71,20 +79,29 @@ def test_subtitle_position_below_box():
     assert sw.width() == box.width()
 
 
-def test_overlay_mode_over_uses_full_width_top_band():
+def test_overlay_mode_over_without_paragraph_data_uses_single_fallback_bar():
     box, _ = _make_box()
     box.show()
     box.set_overlay_mode('over')
     box.show_subtitle('short text')
 
     sw = box._subtitle_win
-    assert sw.x() >= box.x()
-    assert sw.y() >= box.y()
-    assert sw.width() >= int(box.width() * 0.75)
-    assert sw.width() <= box.width()
-    assert sw.height() < box.height()
-    assert sw.x() + sw.width() <= box.x() + box.width()
-    assert sw.y() + sw.height() <= box.y() + box.height()
+    assert sw is not None
+    assert sw.isVisible()
+    assert box._subtitle_paragraph_wins == []
+
+
+def test_overlay_mode_over_uses_paragraph_bars_when_data_exists():
+    box, _ = _make_box()
+    box.show()
+    _set_paragraph_overlay_data(box)
+    box.set_overlay_mode('over')
+    box.show_subtitle('full translation')
+
+    assert len(box._subtitle_paragraph_wins) == 2
+    assert all(win.isVisible() for win in box._subtitle_paragraph_wins)
+    assert box._subtitle_paragraph_wins[0].x() >= box.x() + 10
+    assert box._subtitle_paragraph_wins[1].y() >= box.y() + 38
 
 
 def test_overlay_mode_over_uses_dark_backdrop():
@@ -118,6 +135,19 @@ def test_subtitle_follows_box_on_move():
     sw = box._subtitle_win
     assert sw.x() == box.x()
     assert sw.y() == box.y() + box.height()
+
+
+def test_paragraph_subtitles_follow_box_on_move():
+    box, _ = _make_box()
+    box.show()
+    _set_paragraph_overlay_data(box)
+    box.set_overlay_mode('over')
+    box.show_subtitle('full translation')
+
+    box.move(300, 200)
+
+    assert box._subtitle_paragraph_wins[0].x() >= 310
+    assert box._subtitle_paragraph_wins[0].y() >= 208
 
 
 def test_overlay_font_delta_updates_font_size():
@@ -178,6 +208,17 @@ def test_toggle_subtitle_cycles_modes():
     assert box._subtitle_active is False
 
 
+def test_set_overlay_mode_emits_overlay_mode_changed_signal():
+    box, _ = _make_box()
+    seen = []
+    box.overlay_mode_changed.connect(lambda current, mode: seen.append((current, mode)))
+
+    box.set_overlay_mode('over')
+    box.set_overlay_mode('below')
+
+    assert seen == [(box, 'over'), (box, 'below')]
+
+
 def test_close_event_destroys_subtitle_win():
     box, _ = _make_box(overlay_default_mode='below')
     box.show()
@@ -188,3 +229,17 @@ def test_close_event_destroys_subtitle_win():
     box.close()
 
     assert box._subtitle_win is None
+
+
+def test_close_event_destroys_paragraph_subtitle_wins():
+    box, _ = _make_box()
+    box.show()
+    _set_paragraph_overlay_data(box)
+    box.set_overlay_mode('over')
+    box.show_subtitle('full translation')
+
+    assert len(box._subtitle_paragraph_wins) == 2
+
+    box.close()
+
+    assert box._subtitle_paragraph_wins == []

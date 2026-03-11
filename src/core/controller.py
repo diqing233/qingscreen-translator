@@ -15,6 +15,18 @@ def _fmt_hotkey(key_str: str) -> str:
     return '+'.join(parts)
 
 
+def _normalize_ocr_payload(payload):
+    if isinstance(payload, dict):
+        return {
+            'text': str(payload.get('text', '')),
+            'rows': list(payload.get('rows', []) or []),
+        }
+    return {
+        'text': str(payload or ''),
+        'rows': [],
+    }
+
+
 class CoreController(QObject):
     _sig_start_selection = pyqtSignal()
     _sig_trigger_explain = pyqtSignal()
@@ -283,18 +295,20 @@ class CoreController(QObject):
         from ocr.ocr_worker import OCRWorker
         worker = OCRWorker(rect)
         worker.result_ready.connect(
-            lambda text, region, w=worker: self._on_ocr_done_for_rect(text, region, w))
+            lambda payload, region, w=worker: self._on_ocr_done_for_rect(payload, region, w))
         worker.error_occurred.connect(
             lambda e: self.result_bar.show_error(f'OCR: {e}'))
         worker.finished.connect(lambda: self._cleanup_worker(worker))
         self._workers.append(worker)
         worker.start()
 
-    def _on_ocr_done_for_rect(self, text, rect, worker=None):
+    def _on_ocr_done_for_rect(self, payload, rect, worker=None):
         """截图完成后才创建翻译框，避免框遮挡被截图区域"""
         box = self.box_manager.create_box(rect)
         if hasattr(box, 'overlay_font_delta_changed'):
             box.overlay_font_delta_changed.connect(self._refresh_overlay_font_styles)
+        if hasattr(box, 'overlay_mode_changed'):
+            box.overlay_mode_changed.connect(self._on_box_overlay_mode_changed)
         # 保存初始哈希，供后续自动翻译变化检测使用
         if worker is not None and worker.img_hash is not None:
             self._box_img_hashes[box.box_id] = worker.img_hash
@@ -306,6 +320,7 @@ class CoreController(QObject):
                 box._pending_auto = True
         if self._box_mode == 'ai':
             box.set_mode('temp')   # AI框选框 临时消失
+            text = _normalize_ocr_payload(payload)['text']
             if text.strip():
                 box.set_ocr_text(text)
                 box.start_dismiss_timer()
@@ -314,7 +329,7 @@ class CoreController(QObject):
                 self.result_bar.show_error('未识别到文字，请重新框选')
                 box.start_dismiss_timer()
         else:
-            self._on_ocr_done(text, box)
+            self._on_ocr_done(payload, box)
 
     def _run_ocr(self, box):
         """用于固定框自动重翻：带画面变化检测，无变化则跳过"""
@@ -322,20 +337,28 @@ class CoreController(QObject):
         prev_hash = self._box_img_hashes.get(box.box_id)
         worker = OCRWorker(box.region, prev_hash=prev_hash)
         worker.result_ready.connect(
-            lambda text, _, w=worker: self._on_auto_ocr_done(text, box, w))
+            lambda payload, _, w=worker: self._on_auto_ocr_done(payload, box, w))
         worker.no_change.connect(lambda: self._cleanup_worker(worker))
         worker.error_occurred.connect(lambda e: self.result_bar.show_error(f'OCR: {e}'))
         worker.finished.connect(lambda: self._cleanup_worker(worker))
         self._workers.append(worker)
         worker.start()
 
-    def _on_auto_ocr_done(self, text: str, box, worker):
+    def _on_auto_ocr_done(self, payload, box, worker):
         """自动翻译 OCR 完成后：更新哈希，然后走正常 OCR 完成流程"""
         if worker.img_hash is not None:
             self._box_img_hashes[box.box_id] = worker.img_hash
-        self._on_ocr_done(text, box)
+        self._on_ocr_done(payload, box)
 
-    def _on_ocr_done(self, text: str, box):
+    def _on_ocr_done(self, payload, box):
+        payload = _normalize_ocr_payload(payload)
+        text = payload['text']
+        setattr(box, '_last_ocr_rows', payload['rows'])
+        from core.overlay_layout import group_rows_into_paragraphs
+        setattr(box, '_last_ocr_paragraphs', group_rows_into_paragraphs(payload['rows']))
+        setattr(box, '_last_paragraph_translations', [])
+        setattr(box, '_paragraph_translation_pending', False)
+        setattr(box, '_pending_paragraph_translations', [])
         if text == '\x00LOW_CONTRAST':
             self.result_bar.show_error('所选区域无有效文字（图像近乎空白），请重新框选含文字的区域')
             box.start_dismiss_timer()
@@ -364,6 +387,83 @@ class CoreController(QObject):
         self._workers.append(worker)
         worker.start()
 
+    def _run_paragraph_translate(self, box):
+        from ocr.ocr_worker import TranslationWorker
+
+        paragraphs = list(getattr(box, '_last_ocr_paragraphs', []) or [])
+        if not paragraphs or getattr(box, '_paragraph_translation_pending', False) is True:
+            return
+
+        target = self.settings.get('target_language', 'zh-CN')
+        source = self.settings.get('source_language', 'auto')
+        setattr(box, '_paragraph_translation_pending', True)
+        setattr(box, '_pending_paragraph_translations', [''] * len(paragraphs))
+        self.result_bar.set_stop_clear_busy(True)
+
+        for index, paragraph in enumerate(paragraphs):
+            self._translation_job_seq += 1
+            job_id = self._translation_job_seq
+            worker = TranslationWorker(
+                paragraph.get('text', ''),
+                self.router,
+                target_lang=target,
+                source_lang=source,
+            )
+            worker._translation_job_id = job_id
+            worker._paragraph_index = index
+            worker._paragraph_box_id = getattr(box, 'box_id', None)
+            worker._paragraph_box = box
+            self._active_translation_workers[job_id] = worker
+            worker.result_ready.connect(
+                lambda result, idx=index, w=worker: self._on_single_paragraph_translation_done(result, box, idx, w)
+            )
+            worker.error_occurred.connect(
+                lambda _msg, idx=index, w=worker: self._on_single_paragraph_translation_error(_msg, box, idx, w)
+            )
+            worker.finished.connect(lambda w=worker: self._on_translate_finished(w))
+            self._workers.append(worker)
+            worker.start()
+
+    def _on_single_paragraph_translation_done(self, result: dict, box, index: int, worker=None):
+        if self._is_translation_cancelled(worker):
+            return
+        translations = list(getattr(box, '_pending_paragraph_translations', []) or [])
+        if not translations or index >= len(translations):
+            return
+        translations[index] = result.get('translated', '')
+        setattr(box, '_pending_paragraph_translations', translations)
+        if all(translations):
+            setattr(box, '_paragraph_translation_pending', False)
+            self._on_paragraph_translate_done(translations, box, worker=None)
+
+    def _on_single_paragraph_translation_error(self, msg: str, box, index: int, worker=None):
+        if self._is_translation_cancelled(worker):
+            return
+        setattr(box, '_paragraph_translation_pending', False)
+        setattr(box, '_pending_paragraph_translations', [])
+        setattr(box, '_last_paragraph_translations', [])
+        self.result_bar.show_error(msg)
+
+    def _on_box_overlay_mode_changed(self, box, mode: str):
+        translated = getattr(box, '_last_translation', '')
+        if not translated or mode == 'off':
+            return
+        if mode == 'over':
+            paragraphs = getattr(box, '_last_ocr_paragraphs', [])
+            translations = getattr(box, '_last_paragraph_translations', [])
+            if paragraphs and not translations:
+                self._run_paragraph_translate(box)
+        box.show_subtitle(translated)
+
+    def _on_paragraph_translate_done(self, translations, box, worker=None):
+        if self._is_translation_cancelled(worker):
+            return
+        setattr(box, '_paragraph_translation_pending', False)
+        setattr(box, '_pending_paragraph_translations', [])
+        setattr(box, '_last_paragraph_translations', list(translations or []))
+        if getattr(box, '_subtitle_mode', 'off') == 'over' and getattr(box, '_last_translation', ''):
+            box.show_subtitle(box._last_translation)
+
     def _on_translate_done(self, result: dict, box, worker=None):
         if self._is_translation_cancelled(worker):
             return
@@ -388,6 +488,8 @@ class CoreController(QObject):
         translated = result.get('translated', '')
         setattr(box, '_last_translation', translated)
         overlay_mode = getattr(box, '_subtitle_mode', 'off')
+        if overlay_mode == 'over' and getattr(box, '_last_ocr_paragraphs', []) and not getattr(box, '_last_paragraph_translations', []):
+            self._run_paragraph_translate(box)
         if translated and (getattr(box, '_subtitle_active', False) or overlay_mode != 'off'):
             box.show_subtitle(translated)
 
@@ -407,6 +509,14 @@ class CoreController(QObject):
         if job_id is not None:
             self._active_translation_workers.pop(job_id, None)
             self._cancelled_translation_jobs.discard(job_id)
+        paragraph_box = getattr(worker, '_paragraph_box', None)
+        if paragraph_box is not None:
+            still_running = any(
+                getattr(active_worker, '_paragraph_box', None) is paragraph_box
+                for active_worker in self._active_translation_workers.values()
+            )
+            if not still_running:
+                setattr(paragraph_box, '_paragraph_translation_pending', False)
         self._cleanup_worker(worker)
         if not self._active_translation_workers:
             self.result_bar.set_stop_clear_busy(False)
