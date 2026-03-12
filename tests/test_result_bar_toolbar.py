@@ -146,6 +146,36 @@ def test_source_panel_expands_downward_without_moving_top_edge():
     assert bar._btn_retranslate.isEnabled()
 
 
+def test_source_toggle_uses_only_editable_source_panel():
+    bar = _make_bar()
+    bar.show_result(_result(original='source text'))
+    _app.processEvents()
+
+    bar._toggle_source()
+    _app.processEvents()
+
+    button_bottom = bar._btn_source.mapTo(bar._body, bar._btn_source.rect().bottomLeft()).y()
+    source_top = bar._source_panel.geometry().top()
+
+    assert bar._source_panel.isVisible()
+    assert not hasattr(bar, '_lbl_source')
+    assert bar._source_editor.toPlainText() == 'source text'
+    assert 0 <= source_top - button_bottom <= 10
+
+
+def test_source_toggle_keeps_button_hit_target_clickable():
+    bar = _make_bar()
+    bar.show_result(_result())
+    _app.processEvents()
+
+    bar._toggle_source()
+    _app.processEvents()
+
+    hit = QApplication.widgetAt(bar._btn_source.mapToGlobal(bar._btn_source.rect().center()))
+
+    assert hit is bar._btn_source
+
+
 def test_ai_panel_expands_downward_and_uses_edited_source_text():
     bar = _make_bar()
     bar.show_result(_result())

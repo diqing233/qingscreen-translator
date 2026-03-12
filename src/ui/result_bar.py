@@ -474,59 +474,8 @@ class ResultBar(QWidget):
         ar.addWidget(self._resize_hint_lbl)
         bl.addLayout(ar)
 
-        self._lbl_source = QLabel('')
-        self._lbl_source.setStyleSheet('color: rgba(180,180,200,200); font-size: 12px; padding: 2px 0;')
-        self._lbl_source.setWordWrap(True)
-        self._lbl_source.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self._lbl_source.setVisible(False)
-        bl.addWidget(self._lbl_source)
-
         # ── AI科普加载提示（在原文按钮下方，不覆盖译文）─────────
-        self._lbl_explain_loading = QLabel('💡 AI 科普中...')
-        self._lbl_explain_loading.setStyleSheet(
-            'color: rgba(230,220,130,200); font-size: 11px; padding: 2px 4px;'
-        )
-        self._lbl_explain_loading.setVisible(False)
-        bl.addWidget(self._lbl_explain_loading)
-
         # ── AI科普区（运行后显示在原文按钮下方）─────────────────
-        self._btn_explain_hdr = QPushButton('💡 AI科普 ▲')
-        self._btn_explain_hdr.setVisible(False)
-        self._btn_explain_hdr.setStyleSheet('''
-            QPushButton {
-                background: rgba(255,240,100,12); color: rgba(230,220,130,220);
-                border: 1px solid rgba(255,240,100,30); border-radius: 4px;
-                padding: 2px 8px; font-size: 11px; text-align: left;
-            }
-            QPushButton:hover { background: rgba(255,240,100,22); }
-        ''')
-        self._btn_explain_hdr.clicked.connect(self._toggle_explain_section)
-        bl.addWidget(self._btn_explain_hdr)
-
-        self._lbl_explain = QTextEdit()
-        self._lbl_explain.setReadOnly(True)
-        self._lbl_explain.setMinimumHeight(40)
-        self._lbl_explain.setMinimumWidth(0)
-        self._lbl_explain.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self._lbl_explain.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self._lbl_explain.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self._lbl_explain.setVisible(False)
-        self._lbl_explain.setStyleSheet('''
-            QTextEdit {
-                color: rgba(230,220,140,230); font-size: 12px;
-                background: rgba(255,240,100,10); border: none;
-                padding: 4px; border-radius: 4px;
-            }
-            QScrollBar:vertical {
-                background: rgba(255,255,255,12); width: 6px; border-radius: 3px;
-            }
-            QScrollBar::handle:vertical {
-                background: rgba(255,255,160,60); border-radius: 3px; min-height: 18px;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-        ''')
-        bl.addWidget(self._lbl_explain)
-
         self._source_panel = QWidget()
         self._source_panel.setVisible(False)
         src_layout = QVBoxLayout(self._source_panel)
@@ -1066,27 +1015,18 @@ class ResultBar(QWidget):
         self._source_dirty = False
         self._lbl_translation.setPlainText('绛夊緟缈昏瘧...')
         self._lbl_backend.setText('')
-        self._lbl_source.clear()
-        self._lbl_source.setVisible(False)
         self._set_source_text('', mark_clean=True)
         self._toggle_panel(self._source_panel, False)
         self._update_source_button()
-        self._lbl_explain_loading.setVisible(False)
-        self._lbl_explain.clear()
-        self._lbl_explain.setVisible(False)
         self._explain_loading_label.setVisible(False)
         self._explain_text.clear()
         self._explain_text.setVisible(False)
         self._toggle_panel(self._explain_panel, False)
         self._update_ai_button()
-        self._btn_explain_hdr.setVisible(False)
         self._smart_adjust()
 
     def show_result(self, result: dict):
         self._current_result = result
-        self._lbl_explain.setVisible(False)
-        self._btn_explain_hdr.setVisible(False)
-        self._lbl_explain_loading.setVisible(False)
         self._explain_loading_label.setVisible(False)
         self._explain_text.clear()
         self._explain_text.setVisible(False)
@@ -1096,7 +1036,6 @@ class ResultBar(QWidget):
         self._update_ai_button()
 
         self._lbl_translation.setPlainText(result.get('translated', ''))
-        self._lbl_source.setText(result.get('original', ''))
         if not self._source_dirty or not self.current_source_text():
             self._set_source_text(result.get('original', ''), mark_clean=True)
         self._lbl_backend.setText(f"鏉ユ簮: {result.get('backend', '')}")
@@ -1116,8 +1055,6 @@ class ResultBar(QWidget):
         self._explain_expanded = True
         self._toggle_panel(self._explain_panel, True)
         self._update_ai_button()
-        self._lbl_explain_loading.setVisible(True)
-        self._lbl_explain.setVisible(False)
         self._explain_loading_label.setVisible(True)
         self._explain_text.setVisible(False)
 
@@ -1125,17 +1062,12 @@ class ResultBar(QWidget):
         self._explain_expanded = True
         self._toggle_panel(self._explain_panel, True)
         self._update_ai_button()
-        self._lbl_explain_loading.setVisible(False)
-        self._lbl_explain.setPlainText(text)
-        self._lbl_explain.setVisible(True)
         self._explain_loading_label.setVisible(False)
         self._explain_text.setPlainText(text)
         self._explain_text.setVisible(True)
-        self._btn_explain_hdr.setVisible(False)
 
     def _toggle_source(self):
         self._source_expanded = not self._source_expanded
-        self._lbl_source.setVisible(self._source_expanded)
         self._toggle_panel(self._source_panel, self._source_expanded)
         self._update_source_button()
 
@@ -1144,9 +1076,8 @@ class ResultBar(QWidget):
         self._explain_expanded = vis
         self._toggle_panel(self._explain_panel, vis)
         self._update_ai_button()
-        self._lbl_explain.setVisible(vis)
         self._explain_text.setVisible(vis and bool(self._explain_text.toPlainText()))
-        self._explain_loading_label.setVisible(vis and self._lbl_explain_loading.isVisible())
+        self._explain_loading_label.setVisible(vis and self._explain_loading_label.isVisible())
 
     def _copy_source(self):
         text = self.current_source_text()
