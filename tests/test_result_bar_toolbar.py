@@ -136,6 +136,7 @@ def test_source_panel_expands_downward_without_moving_top_edge():
     _app.processEvents()
     original_y = bar.y()
     original_height = bar.height()
+    translation_height = bar._lbl_translation.height()
 
     bar._toggle_source()
     _app.processEvents()
@@ -143,7 +144,25 @@ def test_source_panel_expands_downward_without_moving_top_edge():
     assert bar.y() == original_y
     assert bar.height() > original_height
     assert bar._source_editor.isVisible()
-    assert bar._btn_retranslate.isEnabled()
+    assert bar._lbl_translation.height() == translation_height
+    assert not bar._btn_retranslate.isEnabled()
+
+
+def test_retranslate_button_is_placed_between_copy_source_and_ai_buttons():
+    bar = _make_bar()
+    bar.show_result(_result())
+    _app.processEvents()
+
+    source_pos = bar._btn_source.mapTo(bar._body, bar._btn_source.rect().topLeft())
+    copy_pos = bar._btn_copy_src.mapTo(bar._body, bar._btn_copy_src.rect().topLeft())
+    retranslate_pos = bar._btn_retranslate.mapTo(bar._body, bar._btn_retranslate.rect().topLeft())
+    ai_pos = bar._btn_ai.mapTo(bar._body, bar._btn_ai.rect().topLeft())
+
+    assert bar._btn_retranslate.parentWidget() is bar._body
+    assert max(source_pos.y(), copy_pos.y(), retranslate_pos.y(), ai_pos.y()) - min(
+        source_pos.y(), copy_pos.y(), retranslate_pos.y(), ai_pos.y()
+    ) <= 2
+    assert source_pos.x() < copy_pos.x() < retranslate_pos.x() < ai_pos.x()
 
 
 def test_source_toggle_uses_only_editable_source_panel():
@@ -185,6 +204,7 @@ def test_ai_panel_expands_downward_and_uses_edited_source_text():
 
     original_y = bar.y()
     original_height = bar.height()
+    translation_height = bar._lbl_translation.height()
     seen = []
     bar.explain_requested.connect(seen.append)
 
@@ -195,6 +215,7 @@ def test_ai_panel_expands_downward_and_uses_edited_source_text():
     assert bar.y() == original_y
     assert bar.height() > original_height
     assert bar._explain_panel.isVisible()
+    assert bar._lbl_translation.height() == translation_height
 
 
 def test_manual_source_entry_can_trigger_retranslation_without_ocr_text():
@@ -209,11 +230,33 @@ def test_manual_source_entry_can_trigger_retranslation_without_ocr_text():
 
     seen = []
     bar.retranslate_requested.connect(seen.append)
+
+    assert bar._btn_retranslate.isEnabled()
+
     bar._btn_retranslate.click()
     _app.processEvents()
 
-    assert bar._btn_retranslate.isEnabled()
+    assert not bar._btn_retranslate.isEnabled()
     assert seen == ['manual source']
+
+
+def test_retranslate_remains_disabled_until_source_text_changes():
+    bar = _make_bar()
+    bar.show_result(_result(original='same source'))
+    bar._toggle_source()
+    _app.processEvents()
+
+    assert not bar._btn_retranslate.isEnabled()
+
+    bar._source_editor.setPlainText('same source')
+    _app.processEvents()
+
+    assert not bar._btn_retranslate.isEnabled()
+
+    bar._source_editor.setPlainText('updated source')
+    _app.processEvents()
+
+    assert bar._btn_retranslate.isEnabled()
 
 
 def test_show_result_does_not_overwrite_active_source_edits():
