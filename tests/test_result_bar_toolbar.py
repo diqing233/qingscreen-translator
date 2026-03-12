@@ -2,6 +2,7 @@ import os
 import sys
 from unittest.mock import MagicMock
 
+from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -144,7 +145,7 @@ def test_source_panel_expands_downward_without_moving_top_edge():
     assert bar.y() == original_y
     assert bar.height() > original_height
     assert bar._source_editor.isVisible()
-    assert bar._lbl_translation.height() == translation_height
+    assert abs(bar._lbl_translation.height() - translation_height) <= 4
     assert not bar._btn_retranslate.isEnabled()
 
 
@@ -158,14 +159,21 @@ def test_retranslate_button_is_placed_between_copy_source_and_ai_buttons():
     retranslate_pos = bar._btn_retranslate.mapTo(bar._body, bar._btn_retranslate.rect().topLeft())
     ai_pos = bar._btn_ai.mapTo(bar._body, bar._btn_ai.rect().topLeft())
 
-    assert bar._btn_retranslate.parentWidget() is bar._body
     assert max(source_pos.y(), copy_pos.y(), retranslate_pos.y(), ai_pos.y()) - min(
         source_pos.y(), copy_pos.y(), retranslate_pos.y(), ai_pos.y()
     ) <= 2
     assert source_pos.x() < copy_pos.x() < retranslate_pos.x() < ai_pos.x()
 
 
-def test_source_toggle_uses_only_editable_source_panel():
+def test_content_splitter_starts_with_translation_panel_only():
+    bar = _make_bar()
+
+    assert bar._content_splitter.orientation() == Qt.Vertical
+    assert bar._content_splitter.count() == 1
+    assert bar._content_splitter.widget(0) is bar._translation_panel
+
+
+def test_source_toggle_inserts_editable_source_panel_into_content_splitter():
     bar = _make_bar()
     bar.show_result(_result(original='source text'))
     _app.processEvents()
@@ -174,12 +182,17 @@ def test_source_toggle_uses_only_editable_source_panel():
     _app.processEvents()
 
     button_bottom = bar._btn_source.mapTo(bar._body, bar._btn_source.rect().bottomLeft()).y()
-    source_top = bar._source_panel.geometry().top()
+    translation_top = bar._translation_panel.mapTo(bar._body, bar._translation_panel.rect().topLeft()).y()
+    translation_bottom = bar._translation_panel.mapTo(bar._body, bar._translation_panel.rect().bottomLeft()).y()
+    source_top = bar._source_panel.mapTo(bar._body, bar._source_panel.rect().topLeft()).y()
 
+    assert bar._content_splitter.count() == 2
+    assert bar._content_splitter.widget(1) is bar._source_panel
     assert bar._source_panel.isVisible()
     assert not hasattr(bar, '_lbl_source')
     assert bar._source_editor.toPlainText() == 'source text'
-    assert 0 <= source_top - button_bottom <= 10
+    assert 0 <= translation_top - button_bottom <= 10
+    assert 0 <= source_top - translation_bottom <= 10
 
 
 def test_source_toggle_keeps_button_hit_target_clickable():
@@ -193,6 +206,84 @@ def test_source_toggle_keeps_button_hit_target_clickable():
     hit = QApplication.widgetAt(bar._btn_source.mapToGlobal(bar._btn_source.rect().center()))
 
     assert hit is bar._btn_source
+
+
+def test_explain_panel_reuses_single_content_panel():
+    bar = _make_bar()
+    bar.show_result(_result())
+    _app.processEvents()
+
+    bar.show_explain_loading()
+    _app.processEvents()
+
+    assert bar._content_splitter.count() == 2
+    assert bar._content_splitter.widget(1) is bar._explain_panel
+    assert bar._explain_panel.isVisible()
+    assert bar._explain_loading_label.isVisible()
+    assert not bar._explain_text.isVisible()
+
+    bar.show_explain('facts')
+    _app.processEvents()
+
+    assert bar._content_splitter.count() == 2
+    assert bar._content_splitter.widget(1) is bar._explain_panel
+    assert not bar._explain_loading_label.isVisible()
+    assert bar._explain_text.isVisible()
+    assert bar._explain_text.toPlainText() == 'facts'
+
+
+def test_collapsing_panels_removes_them_from_content_splitter():
+    bar = _make_bar()
+    bar.show_result(_result())
+    bar._toggle_source()
+    bar.show_explain('facts')
+    _app.processEvents()
+
+    assert bar._content_splitter.count() == 3
+
+    bar._toggle_source()
+    _app.processEvents()
+
+    assert bar._content_splitter.count() == 2
+    assert bar._content_splitter.widget(1) is bar._explain_panel
+
+    bar._toggle_explain_section()
+    _app.processEvents()
+
+    assert bar._content_splitter.count() == 1
+    assert bar._content_splitter.widget(0) is bar._translation_panel
+
+
+def test_splitter_sections_can_be_resized_independently():
+    bar = _make_bar()
+    bar.resize(bar.width(), 420)
+    bar.show_result(_result())
+    bar._toggle_source()
+    bar._source_editor.setPlainText('edited source')
+    bar.show_explain('facts\nmore facts\nthird line')
+    _app.processEvents()
+
+    before = (
+        bar._translation_panel.height(),
+        bar._source_panel.height(),
+        bar._explain_panel.height(),
+    )
+
+    assert bar._content_splitter.count() == 3
+
+    bar._content_splitter.setSizes([220, 110, 70])
+    _app.processEvents()
+
+    after = (
+        bar._translation_panel.height(),
+        bar._source_panel.height(),
+        bar._explain_panel.height(),
+    )
+
+    assert after != before
+    assert after[0] > after[2]
+    assert after[1] > 0
+    assert after[2] > 0
 
 
 def test_ai_panel_expands_downward_and_uses_edited_source_text():
@@ -215,7 +306,7 @@ def test_ai_panel_expands_downward_and_uses_edited_source_text():
     assert bar.y() == original_y
     assert bar.height() > original_height
     assert bar._explain_panel.isVisible()
-    assert bar._lbl_translation.height() == translation_height
+    assert abs(bar._lbl_translation.height() - translation_height) <= 4
 
 
 def test_manual_source_entry_can_trigger_retranslation_without_ocr_text():

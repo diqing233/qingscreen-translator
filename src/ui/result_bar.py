@@ -2,7 +2,7 @@ import logging
 from PyQt5.QtWidgets import (QWidget, QMainWindow, QLabel, QPushButton,
                               QHBoxLayout, QVBoxLayout, QApplication,
                               QSizePolicy, QMenu, QAction, QTextEdit,
-                              QScrollArea, QFrame)
+                              QScrollArea, QFrame, QSplitter)
 from PyQt5.QtCore import Qt, QPoint, QSize, pyqtSignal, QTimer, QEvent
 from PyQt5.QtGui import QFont, QPainter, QColor, QIcon, QPixmap
 
@@ -428,6 +428,23 @@ class ResultBar(QWidget):
         bl.setContentsMargins(0, 0, 0, 0)
         bl.setSpacing(4)
 
+        self._content_splitter = QSplitter(Qt.Vertical)
+        self._content_splitter.setChildrenCollapsible(False)
+        self._content_splitter.setHandleWidth(6)
+        self._content_splitter.setStyleSheet('''
+            QSplitter::handle:vertical {
+                background: rgba(255,255,255,18);
+                margin: 1px 0;
+            }
+        ''')
+
+        self._translation_panel = QWidget()
+        self._translation_panel.setMinimumHeight(40)
+        self._translation_panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        translation_layout = QVBoxLayout(self._translation_panel)
+        translation_layout.setContentsMargins(0, 0, 0, 0)
+        translation_layout.setSpacing(0)
+
         self._lbl_translation = QTextEdit()
         self._lbl_translation.setReadOnly(True)
         self._lbl_translation.setPlainText('等待翻译...')
@@ -437,8 +454,7 @@ class ResultBar(QWidget):
         self._lbl_translation.setFont(f)
         self._lbl_translation.setMinimumHeight(40)
         self._lbl_translation.setMinimumWidth(0)   # 防止 QTextEdit 撑宽结果条
-        self._lbl_translation.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self._lbl_translation.setMaximumHeight(120)
+        self._lbl_translation.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self._lbl_translation.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self._lbl_translation.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._lbl_translation.setStyleSheet('''
@@ -454,9 +470,13 @@ class ResultBar(QWidget):
             }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
         ''')
-        bl.addWidget(self._lbl_translation)
+        translation_layout.addWidget(self._lbl_translation)
+        self._content_splitter.addWidget(self._translation_panel)
 
-        ar = QHBoxLayout()
+        self._details_actions_widget = QWidget()
+        self._details_actions_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        ar = QHBoxLayout(self._details_actions_widget)
+        ar.setContentsMargins(0, 0, 0, 0)
         ar.setSpacing(5)
         self._btn_source   = self._action_btn('原文 ▼', '展开/收起原始识别文字', self._toggle_source)
         self._btn_copy_src = self._action_btn('📋 原文', '复制原始识别文字到剪贴板', self._copy_source)
@@ -478,19 +498,22 @@ class ResultBar(QWidget):
         ar.addWidget(self._lbl_backend)
         ar.addSpacing(8)
         ar.addWidget(self._resize_hint_lbl)
-        bl.addLayout(ar)
+        bl.addWidget(self._details_actions_widget)
 
         # ── AI科普加载提示（在原文按钮下方，不覆盖译文）─────────
         # ── AI科普区（运行后显示在原文按钮下方）─────────────────
         self._source_panel = QWidget()
         self._source_panel.setVisible(False)
+        self._source_panel.setMinimumHeight(72)
+        self._source_panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         src_layout = QVBoxLayout(self._source_panel)
         src_layout.setContentsMargins(0, 0, 0, 0)
         src_layout.setSpacing(4)
         self._source_editor = QTextEdit()
         self._source_editor.setAcceptRichText(False)
         self._source_editor.setMinimumHeight(72)
-        self._source_editor.setMaximumHeight(96)
+        self._source_editor.setMinimumWidth(0)
+        self._source_editor.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self._source_editor.setPlaceholderText('可在这里输入或修改要翻译的内容')
         self._source_editor.setStyleSheet('''
             QTextEdit {
@@ -508,10 +531,10 @@ class ResultBar(QWidget):
         ''')
         self._source_editor.textChanged.connect(self._on_source_text_changed)
         src_layout.addWidget(self._source_editor)
-        bl.addWidget(self._source_panel)
-
         self._explain_panel = QWidget()
         self._explain_panel.setVisible(False)
+        self._explain_panel.setMinimumHeight(40)
+        self._explain_panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         explain_layout = QVBoxLayout(self._explain_panel)
         explain_layout.setContentsMargins(0, 0, 0, 0)
         explain_layout.setSpacing(4)
@@ -524,9 +547,8 @@ class ResultBar(QWidget):
         self._explain_text = QTextEdit()
         self._explain_text.setReadOnly(True)
         self._explain_text.setMinimumHeight(40)
-        self._explain_text.setMaximumHeight(120)
         self._explain_text.setMinimumWidth(0)
-        self._explain_text.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self._explain_text.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self._explain_text.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self._explain_text.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._explain_text.setVisible(False)
@@ -545,7 +567,9 @@ class ResultBar(QWidget):
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
         ''')
         explain_layout.addWidget(self._explain_text)
-        bl.addWidget(self._explain_panel)
+
+        self._content_splitter.setStretchFactor(0, 1)
+        bl.addWidget(self._content_splitter, 1)
 
         cl.addWidget(self._body)
 
@@ -784,14 +808,6 @@ class ResultBar(QWidget):
             return layout.sizeHint().height()
         return panel.sizeHint().height()
 
-    def _resize_visible_panel_delta(self, panel: QWidget, previous_hint: int):
-        if not panel.isVisible():
-            return
-        current_hint = self._panel_size_hint_height(panel)
-        delta = current_hint - previous_hint
-        if delta:
-            self._resize_preserving_top(self.height() + delta)
-
     def _sync_text_edit_height(self, widget: QTextEdit, *, min_height: int, max_height: int) -> int:
         viewport_width = widget.viewport().width()
         if viewport_width <= 0:
@@ -801,14 +817,86 @@ class ResultBar(QWidget):
         document.adjustSize()
         target = int(document.size().height()) + 10
         target = max(min_height, min(max_height, target))
-        widget.setFixedHeight(target)
         return target
 
+    def _preferred_translation_panel_height(self) -> int:
+        return self._sync_text_edit_height(self._lbl_translation, min_height=72, max_height=120)
+
+    def _preferred_source_panel_height(self) -> int:
+        return self._sync_text_edit_height(self._source_editor, min_height=96, max_height=140)
+
+    def _preferred_explain_panel_height(self) -> int:
+        height = 0
+        if self._explain_loading_label.isVisible():
+            height += self._explain_loading_label.sizeHint().height()
+        if self._explain_text.isVisible():
+            if height:
+                height += self._explain_panel.layout().spacing()
+            height += self._sync_text_edit_height(self._explain_text, min_height=72, max_height=140)
+        return max(96, height)
+
+    def _content_splitter_index(self, panel: QWidget) -> int:
+        for index in range(self._content_splitter.count()):
+            if self._content_splitter.widget(index) is panel:
+                return index
+        return -1
+
+    def _panel_in_content_splitter(self, panel: QWidget) -> bool:
+        return self._content_splitter_index(panel) >= 0
+
+    def _insert_content_panel(self, panel: QWidget, index: int):
+        current_index = self._content_splitter_index(panel)
+        if current_index >= 0:
+            if current_index != index:
+                panel.setParent(None)
+                self._content_splitter.insertWidget(index, panel)
+        else:
+            self._content_splitter.insertWidget(index, panel)
+        panel.setVisible(True)
+
+    def _remove_content_panel(self, panel: QWidget):
+        if self._panel_in_content_splitter(panel):
+            panel.setVisible(False)
+            panel.setParent(None)
+
+    def _current_panel_height(self, panel: QWidget, preferred_height: int) -> int:
+        if self._panel_in_content_splitter(panel) and panel.height() > 0:
+            return panel.height()
+        return preferred_height
+
+    def _apply_splitter_sizes(self, *, translation_height=None, source_height=None, explain_height=None):
+        if translation_height is None:
+            translation_height = self._current_panel_height(
+                self._translation_panel,
+                self._preferred_translation_panel_height(),
+            )
+        sizes = [max(72, int(translation_height))]
+
+        if source_height is None:
+            source_height = (
+                self._current_panel_height(self._source_panel, self._preferred_source_panel_height())
+                if self._panel_in_content_splitter(self._source_panel)
+                else 0
+            )
+        if self._panel_in_content_splitter(self._source_panel):
+            sizes.append(max(96, int(source_height)))
+
+        if explain_height is None:
+            explain_height = (
+                self._current_panel_height(self._explain_panel, self._preferred_explain_panel_height())
+                if self._panel_in_content_splitter(self._explain_panel)
+                else 0
+            )
+        if self._panel_in_content_splitter(self._explain_panel):
+            sizes.append(max(96, int(explain_height)))
+
+        self._content_splitter.setSizes(sizes)
+
     def _update_translation_height(self):
-        self._sync_text_edit_height(self._lbl_translation, min_height=40, max_height=120)
+        self._preferred_translation_panel_height()
 
     def _update_explain_height(self):
-        self._sync_text_edit_height(self._explain_text, min_height=40, max_height=120)
+        self._preferred_explain_panel_height()
 
     def _set_source_text(self, text: str, *, mark_clean: bool):
         self._syncing_source_editor = True
@@ -836,11 +924,55 @@ class ResultBar(QWidget):
         self.move(current_pos)
 
     def _toggle_panel(self, panel: QWidget, visible: bool):
-        if panel.isVisible() == visible:
-            return
-        delta = panel.sizeHint().height() + self._body.layout().spacing()
-        panel.setVisible(visible)
-        self._resize_preserving_top(self.height() + (delta if visible else -delta))
+        preferred_height = (
+            self._preferred_source_panel_height()
+            if panel is self._source_panel
+            else self._preferred_explain_panel_height()
+        )
+        translation_height = self._current_panel_height(
+            self._translation_panel,
+            self._preferred_translation_panel_height(),
+        )
+        source_height = (
+            self._current_panel_height(self._source_panel, self._preferred_source_panel_height())
+            if self._panel_in_content_splitter(self._source_panel)
+            else 0
+        )
+        explain_height = (
+            self._current_panel_height(self._explain_panel, self._preferred_explain_panel_height())
+            if self._panel_in_content_splitter(self._explain_panel)
+            else 0
+        )
+
+        if visible:
+            already_visible = self._panel_in_content_splitter(panel)
+            if panel is self._source_panel:
+                self._insert_content_panel(self._source_panel, 1)
+                source_height = max(source_height, preferred_height)
+            else:
+                explain_index = 2 if self._panel_in_content_splitter(self._source_panel) else 1
+                self._insert_content_panel(self._explain_panel, explain_index)
+                explain_height = max(explain_height, preferred_height)
+            if not already_visible:
+                self._resize_preserving_top(self.height() + preferred_height + self._content_splitter.handleWidth())
+        else:
+            if not self._panel_in_content_splitter(panel):
+                return
+            current_height = self._current_panel_height(panel, preferred_height)
+            self._remove_content_panel(panel)
+            if panel is self._source_panel:
+                source_height = 0
+            else:
+                explain_height = 0
+            self._resize_preserving_top(
+                max(self.minimumHeight(), self.height() - current_height - self._content_splitter.handleWidth())
+            )
+
+        self._apply_splitter_sizes(
+            translation_height=translation_height,
+            source_height=source_height,
+            explain_height=explain_height,
+        )
 
     def _update_source_button(self):
         self._btn_source.setText('原文 ▲' if self._source_expanded else '原文 ▼')
@@ -874,6 +1006,7 @@ class ResultBar(QWidget):
         self._refresh_toolbar_layout()
         self._update_translation_height()
         self._update_explain_height()
+        self._apply_splitter_sizes()
 
     def refresh_opacity(self):
         self._apply_opacity()
@@ -911,6 +1044,7 @@ class ResultBar(QWidget):
         self._btn_source.setText('原文 ▼')
 
         self._lbl_translation.setPlainText(result.get('translated', ''))
+        self._update_translation_height()
         self._update_translation_height()
         self._lbl_source.setText(result.get('original', ''))
         self._lbl_backend.setText(f"来源: {result.get('backend', '')}")
@@ -960,7 +1094,9 @@ class ResultBar(QWidget):
 
     def show_loading(self, msg: str = '翻译中...'):
         self._lbl_translation.setPlainText(msg)
+        self._update_translation_height()
         self._lbl_backend.setText('')
+        self._apply_splitter_sizes()
         if not self.isVisible() and not self._hidden_to_tray:
             self.show()
 
@@ -995,6 +1131,7 @@ class ResultBar(QWidget):
         self._manual_size = False
         self.resize(DEFAULT_W, DEFAULT_H)
         self._manual_size = True
+        self._apply_splitter_sizes()
 
     def _refresh_overlay_button(self):
         if not hasattr(self, '_btn_overlay'):
@@ -1056,6 +1193,7 @@ class ResultBar(QWidget):
         self._lbl_translation.setPlainText('绛夊緟缈昏瘧...')
         self._lbl_backend.setText('')
         self._set_source_text('', mark_clean=True)
+        self._update_translation_height()
         self._toggle_panel(self._source_panel, False)
         self._update_source_button()
         self._explain_loading_label.setVisible(False)
@@ -1064,6 +1202,7 @@ class ResultBar(QWidget):
         self._update_explain_height()
         self._toggle_panel(self._explain_panel, False)
         self._update_ai_button()
+        self._apply_splitter_sizes()
         self._smart_adjust()
 
     def show_result(self, result: dict):
@@ -1071,14 +1210,19 @@ class ResultBar(QWidget):
         self._explain_loading_label.setVisible(False)
         self._explain_text.clear()
         self._explain_text.setVisible(False)
-        if self._explain_expanded:
+        if self._explain_expanded or self._explain_panel.isVisible():
             self._toggle_panel(self._explain_panel, False)
         self._explain_expanded = False
         self._update_ai_button()
 
         self._lbl_translation.setPlainText(result.get('translated', ''))
+        self._update_translation_height()
         if not self._source_dirty or not self.current_source_text():
             self._set_source_text(result.get('original', ''), mark_clean=True)
+        if self._source_expanded:
+            self._toggle_panel(self._source_panel, True)
+        else:
+            self._apply_splitter_sizes()
         self._lbl_backend.setText(f"鏉ユ簮: {result.get('backend', '')}")
 
         src = result.get('source_lang', '')
@@ -1093,29 +1237,21 @@ class ResultBar(QWidget):
         self._smart_adjust()
 
     def show_explain_loading(self):
-        previous_hint = self._panel_size_hint_height(self._explain_panel)
         self._explain_expanded = True
         self._explain_loading_label.setVisible(True)
         self._explain_text.clear()
         self._explain_text.setVisible(False)
         self._update_explain_height()
-        if not self._explain_panel.isVisible():
-            self._toggle_panel(self._explain_panel, True)
-        else:
-            self._resize_visible_panel_delta(self._explain_panel, previous_hint)
+        self._toggle_panel(self._explain_panel, True)
         self._update_ai_button()
 
     def show_explain(self, text: str):
-        previous_hint = self._panel_size_hint_height(self._explain_panel)
         self._explain_expanded = True
         self._explain_loading_label.setVisible(False)
         self._explain_text.setPlainText(text)
-        self._update_explain_height()
         self._explain_text.setVisible(True)
-        if not self._explain_panel.isVisible():
-            self._toggle_panel(self._explain_panel, True)
-        else:
-            self._resize_visible_panel_delta(self._explain_panel, previous_hint)
+        self._update_explain_height()
+        self._toggle_panel(self._explain_panel, True)
         self._update_ai_button()
 
     def _toggle_source(self):
@@ -1124,12 +1260,15 @@ class ResultBar(QWidget):
         self._update_source_button()
 
     def _toggle_explain_section(self):
+        loading_visible = not self._explain_loading_label.isHidden()
+        has_text = bool(self._explain_text.toPlainText())
         vis = not self._explain_expanded
         self._explain_expanded = vis
+        self._explain_loading_label.setVisible(vis and loading_visible and not has_text)
+        self._explain_text.setVisible(vis and has_text)
+        self._update_explain_height()
         self._toggle_panel(self._explain_panel, vis)
         self._update_ai_button()
-        self._explain_text.setVisible(vis and bool(self._explain_text.toPlainText()))
-        self._explain_loading_label.setVisible(vis and self._explain_loading_label.isVisible())
 
     def _copy_source(self):
         text = self.current_source_text()
