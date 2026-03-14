@@ -63,12 +63,12 @@ def _can_merge_rows_into_line(previous_rect, current_rect):
     return _horizontal_gap(previous_rect, current_rect) <= gap_threshold
 
 
-def _can_merge_lines(previous_rect, current_rect):
+def _can_merge_lines(previous_rect, current_rect, gap_ratio: float = 0.0):
     vertical_gap = current_rect['y'] - _rect_bottom(previous_rect)
     if vertical_gap < 0:
         vertical_gap = 0
 
-    height_threshold = max(12, int(max(previous_rect['height'], current_rect['height']) * 1.6))
+    height_threshold = max(12, int(max(previous_rect['height'], current_rect['height']) * 1.6 * (1 + gap_ratio)))
     if vertical_gap > height_threshold:
         return False
 
@@ -101,7 +101,7 @@ def _group_rows_into_lines(rows):
     return lines
 
 
-def group_rows_into_paragraphs(rows):
+def group_rows_into_paragraphs(rows, gap_ratio: float = 0.0):
     normalized = []
     for row in rows or []:
         text = str(row.get('text', '')).strip()
@@ -123,7 +123,7 @@ def group_rows_into_paragraphs(rows):
     current = None
     previous_line = None
     for line in lines:
-        if current is None or not _can_merge_lines(previous_line['rect'], line['rect']):
+        if current is None or not _can_merge_lines(previous_line['rect'], line['rect'], gap_ratio):
             current = {
                 'text': line['text'],
                 'rows': list(line['rows']),
