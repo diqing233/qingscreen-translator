@@ -186,6 +186,7 @@ class ResultBar(QWidget):
         self._drag_pos = QPoint()
         self._box_mode = 'fixed'
         self._overlay_mode = self.settings.get('overlay_default_mode', 'off')
+        self._para_mode: bool = bool(self.settings.get('para_split_enabled', True))
         self._translation_busy = False
         self._translate_mode = 'manual'
         self._hidden_to_tray = False
@@ -487,6 +488,9 @@ class ResultBar(QWidget):
             'color: rgba(160,160,185,190); font-size: 10px; padding: 0;'
         )
         self._resize_hint_lbl.setToolTip('拖拽此处（右下角 20px 范围）调整窗口大小')
+        self._btn_para = self._action_btn('分段 ▼', '切换分段/整体显示模式', self._toggle_para_mode)
+        self._btn_para.setEnabled(False)  # 初始无段落数据时置灰
+        ar.addWidget(self._btn_para)
         ar.addWidget(self._btn_source)
         ar.addWidget(self._btn_copy_src)
         self._btn_retranslate = self._action_btn('重新翻译', '使用当前原文内容重新翻译', self._on_retranslate)
@@ -1215,10 +1219,17 @@ class ResultBar(QWidget):
         self._explain_expanded = False
         self._update_ai_button()
 
-        self._lbl_translation.setPlainText(result.get('translated', ''))
+        paras = result.get('paragraphs', [])
+        if self._para_mode and paras:
+            self._lbl_translation.setPlainText(self._format_para_text(paras, 'translation'))
+            if not self._source_dirty or not self.current_source_text():
+                self._set_source_text(self._format_para_text(paras, 'text'), mark_clean=True)
+        else:
+            self._lbl_translation.setPlainText(result.get('translated', ''))
+            if not self._source_dirty or not self.current_source_text():
+                self._set_source_text(result.get('original', ''), mark_clean=True)
         self._update_translation_height()
-        if not self._source_dirty or not self.current_source_text():
-            self._set_source_text(result.get('original', ''), mark_clean=True)
+        self._update_para_button()
         if self._source_expanded:
             self._toggle_panel(self._source_panel, True)
         else:
@@ -1253,6 +1264,29 @@ class ResultBar(QWidget):
         self._update_explain_height()
         self._toggle_panel(self._explain_panel, True)
         self._update_ai_button()
+
+    def _format_para_text(self, paragraphs: list, key: str) -> str:
+        return "\n".join(f"[{i+1}] {p[key]}" for i, p in enumerate(paragraphs))
+
+    def _update_para_button(self):
+        has_paras = bool(
+            self._current_result and self._current_result.get('paragraphs')
+        )
+        self._btn_para.setText('分段 ▲' if self._para_mode else '分段 ▼')
+        self._btn_para.setEnabled(has_paras)
+
+    def _toggle_para_mode(self):
+        self._para_mode = not self._para_mode
+        self._source_dirty = False  # 用户主动切换格式，清除编辑保护
+        self._update_para_button()
+        if self._current_result:
+            self.show_result(self._current_result)
+
+    def sync_para_mode_from_settings(self):
+        self._para_mode = bool(self.settings.get('para_split_enabled', True))
+        self._update_para_button()
+        if self._current_result:
+            self.show_result(self._current_result)
 
     def _toggle_source(self):
         self._source_expanded = not self._source_expanded
