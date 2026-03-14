@@ -154,6 +154,7 @@ class TranslationBox(QWidget):
         btn_layout.setSpacing(2)
 
         self._btn_translate = self._make_btn("译", "立即翻译", lambda: self.translate_requested.emit(self))
+        self._btn_para = self._make_btn("¶", "切换分段显示", self._on_toggle_para)
         self._btn_pin = self._make_btn("钉", "固定/取消固定", self._on_toggle_pin)
         self._btn_subtitle = self._make_btn("⊞", "覆盖翻译", self._on_toggle_subtitle)
         self._btn_overlay_font_down = self._make_btn(
@@ -173,6 +174,7 @@ class TranslationBox(QWidget):
 
         for btn in [
             self._btn_translate,
+            self._btn_para,
             self._btn_pin,
             self._btn_subtitle,
             self._btn_overlay_font_down,
@@ -599,6 +601,12 @@ class TranslationBox(QWidget):
         self.set_overlay_mode(self.OVERLAY_CYCLE[(index + 1) % len(self.OVERLAY_CYCLE)])
         if self._subtitle_mode != self.OVERLAY_OFF and self._last_translation:
             self.show_subtitle(self._last_translation)
+
+    def _on_toggle_para(self):
+        self._para_mode = not getattr(self, '_para_mode', False)
+        style_on  = self._btn_subtitle.property('active_style') or ''
+        style_off = ''
+        self._btn_para.setStyleSheet(style_on if self._para_mode else style_off)
 
     def _on_dismiss_timeout(self):
         if self.mode == self.MODE_TEMP and not self._position_locked:
