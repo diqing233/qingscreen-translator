@@ -2,7 +2,7 @@
 
 **日期**：2026-03-14
 **项目**：ScreenTranslator
-**状态**：已审批（经 spec-review 第三轮修订）
+**状态**：已审批（经 spec-review 第四轮修订）
 
 ---
 
@@ -193,7 +193,7 @@ if pending:
     else:
         result['paragraphs'] = []
     box._pending_para_texts = []
-result.setdefault('paragraphs', [])
+result.setdefault('paragraphs', [])  # 必须在 if box is not None: 块外部，确保 box=None 路径也设置此字段
 ```
 
 ### 4. `src/ui/settings_window.py`
@@ -238,7 +238,16 @@ def sync_para_mode_from_settings(self):
 [分段 ▼]  [原文 ▼]  [📋 原文]  [重新翻译]  [💬 AI科普]
 ```
 
-点击回调 `_toggle_para_mode()`：翻转 `_para_mode`，调用 `_update_para_button()`，用 `_current_result` 刷新显示。
+点击回调 `_toggle_para_mode()`：翻转 `_para_mode`，调用 `_update_para_button()`，**先清除 `_source_dirty`**（用户主动切换分段格式视为放弃手动编辑），再用 `_current_result` 刷新显示。
+
+```python
+def _toggle_para_mode(self):
+    self._para_mode = not self._para_mode
+    self._source_dirty = False  # 主动切换格式，清除编辑保护
+    self._update_para_button()
+    if self._current_result:
+        self.show_result(self._current_result)
+```
 
 **`_update_para_button()`**：
 
@@ -318,7 +327,7 @@ settings_win.settings_saved.connect(self.result_bar.sync_para_mode_from_settings
 | 文件 | 改动 |
 |------|------|
 | `src/core/settings.py` | 2 个新默认值 |
-| `src/core/overlay_layout.py` | `_can_merge_lines` 和 `group_rows_into_paragraphs` 各增加 `gap_ratio: float = 0.5` 参数 |
+| `src/core/overlay_layout.py` | `_can_merge_lines` 和 `group_rows_into_paragraphs` 各增加 `gap_ratio: float = 0.0` 参数（默认 `0.0` 保持向后兼容，controller 显式传入 `gap_ratio=gap_ratio` 启用用户配置值） |
 | `src/core/controller.py` | ① 清理重复方法；② `_normalize_ocr_payload` **从模块级函数改为实例方法**（加 `self`，更新两处调用点）并新增段落检测；③ `_on_ocr_done` 暂存段落文本；④ `_on_translate_done` 配对段落；⑤ `settings_saved` 连接 |
 | `src/ui/settings_window.py` | 通用 tab 新增 2 个控件 + `_save` |
 | `src/ui/result_bar.py` | `_btn_para` 按钮 + `_para_mode` 状态 + `show_result` 逻辑 + `sync_para_mode_from_settings` |
