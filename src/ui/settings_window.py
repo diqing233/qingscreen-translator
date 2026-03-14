@@ -1,8 +1,8 @@
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
-                              QLineEdit, QSpinBox, QComboBox, QPushButton,
-                              QListWidget, QListWidgetItem, QTabWidget,
-                              QWidget, QFormLayout, QMessageBox,
-                              QProgressBar, QGroupBox)
+                             QLineEdit, QSpinBox, QComboBox, QPushButton,
+                             QListWidget, QListWidgetItem, QTabWidget,
+                             QWidget, QFormLayout, QMessageBox,
+                             QProgressBar, QGroupBox, QCheckBox, QDoubleSpinBox)
 from PyQt5.QtCore import pyqtSignal, Qt
 
 BACKEND_LABELS = {
@@ -116,6 +116,21 @@ class SettingsWindow(QDialog):
         self._edit_hotkey_mode_ai = QLineEdit()
         self._edit_hotkey_mode_ai.setPlaceholderText('如：alt+4')
         form.addRow('切换AI框选热键', self._edit_hotkey_mode_ai)
+
+        self._para_check = QCheckBox('自动识别段落，分段翻译')
+        form.addRow('', self._para_check)
+
+        self._para_ratio_spin = QDoubleSpinBox()
+        self._para_ratio_spin.setRange(0.1, 3.0)
+        self._para_ratio_spin.setSingleStep(0.1)
+        self._para_ratio_spin.setDecimals(1)
+        self._para_ratio_spin.setToolTip('间距阈值越大，段落之间需要更大的垂直间距才会被切分')
+        form.addRow('段落间距阈值（×行高）', self._para_ratio_spin)
+
+        # checkbox 控制 spin 的可用性
+        self._para_check.stateChanged.connect(
+            lambda state: self._para_ratio_spin.setEnabled(bool(state))
+        )
 
         tabs.addTab(gen, '通用')
 
@@ -295,6 +310,10 @@ class SettingsWindow(QDialog):
         for name, edit in self._key_fields.items():
             edit.setText(keys.get(name, ''))
 
+        self._para_check.setChecked(bool(self.settings.get('para_split_enabled', True)))
+        self._para_ratio_spin.setValue(float(self.settings.get('para_gap_ratio', 0.5)))
+        self._para_ratio_spin.setEnabled(self._para_check.isChecked())
+
         self._refresh_dict_status()
         self._sync_dict_group_visibility()
 
@@ -327,6 +346,9 @@ class SettingsWindow(QDialog):
 
         keys = {name: edit.text() for name, edit in self._key_fields.items()}
         self.settings.set('api_keys', keys)
+
+        self.settings.set('para_split_enabled', self._para_check.isChecked())
+        self.settings.set('para_gap_ratio', self._para_ratio_spin.value())
 
         self.settings_saved.emit()
         self.close()
