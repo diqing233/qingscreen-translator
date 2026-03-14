@@ -490,7 +490,6 @@ class ResultBar(QWidget):
         self._resize_hint_lbl.setToolTip('拖拽此处（右下角 20px 范围）调整窗口大小')
         self._btn_para = self._action_btn('分段 ▼', '切换分段/整体显示模式', self._toggle_para_mode)
         self._btn_para.setEnabled(False)  # 初始无段落数据时置灰
-        ar.addWidget(self._btn_para)
         ar.addWidget(self._btn_source)
         ar.addWidget(self._btn_copy_src)
         self._btn_retranslate = self._action_btn('重新翻译', '使用当前原文内容重新翻译', self._on_retranslate)
@@ -498,11 +497,12 @@ class ResultBar(QWidget):
         ar.addWidget(self._btn_retranslate)
         self._btn_ai = self._action_btn('💬 AI科普', '科普当前原文内容（同 Alt+E）', self._on_explain)
         ar.addWidget(self._btn_ai)
+        ar.addWidget(self._btn_para)
         ar.addStretch()
         ar.addWidget(self._lbl_backend)
         ar.addSpacing(8)
         ar.addWidget(self._resize_hint_lbl)
-        bl.addWidget(self._details_actions_widget)
+        translation_layout.addWidget(self._details_actions_widget)
 
         # ── AI科普加载提示（在原文按钮下方，不覆盖译文）─────────
         # ── AI科普区（运行后显示在原文按钮下方）─────────────────

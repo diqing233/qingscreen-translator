@@ -191,7 +191,8 @@ def test_source_toggle_inserts_editable_source_panel_into_content_splitter():
     assert bar._source_panel.isVisible()
     assert not hasattr(bar, '_lbl_source')
     assert bar._source_editor.toPlainText() == 'source text'
-    assert 0 <= translation_top - button_bottom <= 10
+    # button row is now inside translation_panel (below translation text, above source panel)
+    assert translation_top <= button_bottom <= translation_bottom
     assert 0 <= source_top - translation_bottom <= 10
 
 
