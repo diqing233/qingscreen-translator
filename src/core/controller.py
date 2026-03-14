@@ -202,12 +202,6 @@ class CoreController(QObject):
     def _start_selection(self):
         self.overlay.show_overlay()
 
-    def _trigger_explain(self):
-        if self.result_bar._current_result:
-            text = self.result_bar._current_result.get('original', '')
-            if text:
-                self._on_explain_requested(text)
-
     def _handle_result_bar_close(self):
         behavior = self.settings.get('close_button_behavior', 'ask')
         remember = False
@@ -465,41 +459,6 @@ class CoreController(QObject):
         if getattr(box, '_subtitle_mode', 'off') == 'over' and getattr(box, '_last_translation', ''):
             box.show_subtitle(box._last_translation)
 
-    def _on_translate_done(self, result: dict, box, worker=None):
-        if self._is_translation_cancelled(worker):
-            return
-        try:
-            self.history.add(
-                result.get('original', ''),
-                result.get('translated', ''),
-                result.get('source_lang', ''),
-                result.get('target_lang', ''),
-                result.get('backend', ''),
-            )
-        except Exception as e:
-            logger.warning(f'History save failed: {e}')
-
-        if self._box_mode == 'multi':
-            self._multi_results[box.box_id] = result
-            self.result_bar.show_multi_results(list(self._multi_results.values()))
-        else:
-            self.result_bar.show_result(result)
-
-        # 若该框字幕已激活，刷新字幕内容
-        translated = result.get('translated', '')
-        setattr(box, '_last_translation', translated)
-        overlay_mode = getattr(box, '_subtitle_mode', 'off')
-        if overlay_mode == 'over' and getattr(box, '_last_ocr_paragraphs', []) and not getattr(box, '_last_paragraph_translations', []):
-            self._run_paragraph_translate(box)
-        if translated and (getattr(box, '_subtitle_active', False) or overlay_mode != 'off'):
-            box.show_subtitle(translated)
-
-        if box.mode == 'temp':
-            box.start_dismiss_timer()
-        elif getattr(box, '_pending_auto', False):
-            box._pending_auto = False
-            box.start_auto_translate()
-
     def _on_translate_error(self, msg: str, worker=None):
         if self._is_translation_cancelled(worker):
             return
@@ -558,22 +517,6 @@ class CoreController(QObject):
         worker.finished.connect(lambda: self._cleanup_worker(worker))
         self._workers.append(worker)
         worker.start()
-
-    def _on_overlay_requested(self, text: str):
-        """切换所有翻译框的字幕条显示。"""
-        boxes = list(self.box_manager._boxes.values())
-        if not boxes:
-            return
-        any_subtitle = any(getattr(b, '_subtitle_active', False) for b in boxes)
-        for box in boxes:
-            if any_subtitle:
-                box.hide_subtitle()
-            else:
-                # 多框模式：各框显示各自的译文
-                result = self._multi_results.get(box.box_id)
-                t = result.get('translated', '') if result else text
-                if t:
-                    box.show_subtitle(t)
 
     def _cleanup_worker(self, worker):
         if worker in self._workers:
