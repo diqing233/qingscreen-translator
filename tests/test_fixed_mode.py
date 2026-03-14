@@ -212,6 +212,11 @@ def test_ocr_done_preserves_layout_payload():
     ctrl = CoreController.__new__(CoreController)
     ctrl.result_bar = MagicMock()
     ctrl._run_translate = MagicMock()
+    ctrl.settings = MagicMock()
+    ctrl.settings.get.side_effect = lambda key, default=None: {
+        'para_split_enabled': True,
+        'para_gap_ratio': 0.5,
+    }.get(key, default)
 
     box = MagicMock()
 

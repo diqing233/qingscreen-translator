@@ -15,17 +15,6 @@ def _fmt_hotkey(key_str: str) -> str:
     return '+'.join(parts)
 
 
-def _normalize_ocr_payload(payload):
-    if isinstance(payload, dict):
-        return {
-            'text': str(payload.get('text', '')),
-            'rows': list(payload.get('rows', []) or []),
-        }
-    return {
-        'text': str(payload or ''),
-        'rows': [],
-    }
-
 
 class CoreController(QObject):
     _sig_start_selection = pyqtSignal()
@@ -101,6 +90,36 @@ class CoreController(QObject):
         self._setup_hotkeys()
         self._refresh_mode_tooltips()
         logger.info('ScreenTranslator started')
+
+    # ── OCR payload 规范化 ───────────────────────────────────────
+
+    def _normalize_ocr_payload(self, payload: dict) -> dict:
+        from core.overlay_layout import group_rows_into_paragraphs
+        if not isinstance(payload, dict):
+            return {'text': str(payload or ''), 'rows': [], 'paragraphs': [], 'para_texts': []}
+        rows = list(payload.get('rows', []) or [])
+        para_enabled = self.settings.get('para_split_enabled', True)
+        gap_ratio = float(self.settings.get('para_gap_ratio', 0.5))
+
+        paras = []
+        para_texts = []
+        if para_enabled and rows:
+            paras = group_rows_into_paragraphs(rows, gap_ratio=gap_ratio)
+
+        if para_enabled and len(paras) >= 2:
+            para_texts = [' '.join(r['text'] for r in p['rows']) for p in paras]
+            text = '\n\n'.join(para_texts)
+        else:
+            text = str(payload.get('text', ''))
+            paras = []
+            para_texts = []
+
+        return {
+            'text':       text,
+            'rows':       rows,
+            'paragraphs': paras,
+            'para_texts': para_texts,
+        }
 
     # ── 热键 ────────────────────────────────────────────────────
 
@@ -315,7 +334,7 @@ class CoreController(QObject):
                 box._pending_auto = True
         if self._box_mode == 'ai':
             box.set_mode('temp')   # AI框选框 临时消失
-            text = _normalize_ocr_payload(payload)['text']
+            text = self._normalize_ocr_payload(payload)['text']
             if text.strip():
                 box.set_ocr_text(text)
                 box.start_dismiss_timer()
@@ -346,7 +365,7 @@ class CoreController(QObject):
         self._on_ocr_done(payload, box)
 
     def _on_ocr_done(self, payload, box):
-        payload = _normalize_ocr_payload(payload)
+        payload = self._normalize_ocr_payload(payload)
         text = payload['text']
         setattr(box, '_last_ocr_rows', payload['rows'])
         from core.overlay_layout import group_rows_into_paragraphs
