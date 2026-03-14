@@ -64,3 +64,11 @@ def test_overlay_settings_persist():
     store2 = SettingsStore(f.name)
     assert store2.get('overlay_default_mode') == 'below'
     assert store2.get('overlay_font_delta') == 3
+
+def test_para_split_defaults():
+    import tempfile, os
+    from core.settings import SettingsStore
+    with tempfile.TemporaryDirectory() as d:
+        s = SettingsStore(os.path.join(d, 'settings.json'))
+        assert s.get('para_split_enabled') is True
+        assert s.get('para_gap_ratio') == 0.5

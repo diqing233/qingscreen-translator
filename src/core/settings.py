@@ -20,6 +20,8 @@ DEFAULTS = {
     'close_button_behavior': 'ask',
     'overlay_default_mode': 'off',
     'overlay_font_delta': 0,
+    'para_split_enabled': True,
+    'para_gap_ratio': 0.5,
     'translation_order': ['dictionary', 'bing', 'google', 'baidu', 'deepl', 'zhipu', 'siliconflow', 'moonshot', 'deepseek', 'openai', 'claude', 'sogou', 'youdao'],
     'enabled_backends': ['google', 'zhipu'],
     'api_keys': {
