@@ -2,7 +2,7 @@
 
 **日期**：2026-03-14
 **项目**：ScreenTranslator
-**状态**：已审批（经 spec-review 第二轮修订）
+**状态**：已审批（经 spec-review 第三轮修订）
 
 ---
 
@@ -50,14 +50,15 @@ OCR 识别
 controller._normalize_ocr_payload(payload)
   — 修改：调用 group_rows_into_paragraphs(rows, gap_ratio) 生成 paragraphs
   — 若 para_split_enabled=True 且段落数 ≥ 2：
-      text = "\n\n".join(' '.join(r['text'] for r in p['rows']) for p in paras)
-  — 否则 text 保持原空格连接，paragraphs = []
-  — payload 新增 paragraphs 字段
+      para_texts = [' '.join(r['text'] for r in p['rows']) for p in paras]
+      text = "\n\n".join(para_texts)
+  — 否则 text 保持原空格连接，paragraphs = []，para_texts = []
+  — payload 新增 paragraphs 和 para_texts 字段
 
 controller._on_ocr_done(payload, region, box)
   — 已有的 overlay 段落写入保持不变（box._last_ocr_paragraphs）
-  — 暂存 para_text 到 box（供 _on_translate_done 使用）：
-      box._pending_para_texts = [p_text for p in paras]
+  — 直接使用 normalized_payload['para_texts'] 暂存（无重复计算）：
+      box._pending_para_texts = normalized_payload.get('para_texts', [])
 
 TranslationWorker.translate("para1\n\npara2")
   ↓
@@ -99,13 +100,13 @@ DEFAULTS 新增：
 **需扩展 `gap_ratio` 参数**（当前签名不接受该参数，需修改两处）：
 
 ```python
-def _can_merge_lines(previous_rect, current_rect, gap_ratio: float = 0.5):
+def _can_merge_lines(previous_rect, current_rect, gap_ratio: float = 0.0):
     vertical_gap = current_rect['y'] - _rect_bottom(previous_rect)
     if vertical_gap < 0:
         vertical_gap = 0
 
-    # gap_ratio 控制段落边界阈值（默认 0.5 即行高 × 1.6 × gap_ratio 放大系数）
-    # 实际乘数 = 1.6 × (1 + gap_ratio)，gap_ratio=0.5 → 阈值 ≈ 行高 × 2.4
+    # gap_ratio=0 时公式退化为原始值 max(12, h * 1.6)，向后兼容
+    # gap_ratio>0 时阈值增大，段落更难被切分（段落间距更宽松）
     height_threshold = max(12, int(max(previous_rect['height'], current_rect['height']) * 1.6 * (1 + gap_ratio)))
     if vertical_gap > height_threshold:
         return False
@@ -119,24 +120,28 @@ def _can_merge_lines(previous_rect, current_rect, gap_ratio: float = 0.5):
     return abs(previous_rect['x'] - current_rect['x']) <= indent_threshold
 
 
-def group_rows_into_paragraphs(rows, gap_ratio: float = 0.5):
+def group_rows_into_paragraphs(rows, gap_ratio: float = 0.0):
     # ... 其余不变，仅在 _can_merge_lines 调用处透传 gap_ratio ...
     for line in lines:
         if current is None or not _can_merge_lines(previous_line['rect'], line['rect'], gap_ratio):
             ...
 ```
 
-> **注意**：`gap_ratio` 默认值 `0.5` 保持与原有 `_can_merge_lines` 行为（`height_threshold = max(12, h * 1.6)`）尽量接近。调用方不传 `gap_ratio` 时行为不变，向后兼容。
+> **关键**：`gap_ratio` 默认值为 `0.0`（保持原始阈值 `h * 1.6`，向后兼容）。已有的 overlay 路径（`controller._on_ocr_done` 中的直接调用）不传 `gap_ratio`，行为不变。新的分段翻译路径（`_normalize_ocr_payload`）显式传入 `gap_ratio=gap_ratio`（从 settings `para_gap_ratio` 取值，默认 `0.5`），即用户可通过设置调整段落灵敏度。
 
 ### 3. `src/core/controller.py`
 
-**清理前置**：删除第 468 行处的重复 `_on_translate_done`（死代码），保留第 643 行的有效版本。同理清理重复的 `_on_overlay_requested`。
+**清理前置**：删除第 468 行处的重复 `_on_translate_done`（死代码），保留第 643 行的有效版本。
+
+> **实施注意**：删除前必须逐行对比两个版本的差异，确认第 643 行版本包含了第 468 行的所有有效逻辑（包括 `self._box_mode == 'multi'` 检查和 box 守护条件）。同理清理重复的 `_on_overlay_requested`（保留第 605 行版本，删除第 562 行版本），以及重复的 `_trigger_explain`（保留第 626 行版本，删除第 205 行版本），均需先 diff 后删除。
 
 **`_normalize_ocr_payload` 改为实例方法**：
 
 当前代码中 `_normalize_ocr_payload` 是**模块级函数**（无 `self`），无法访问 `self.settings`。必须将其移入 `Controller` 类并添加 `self` 参数，同时更新两处调用点：原调用 `_normalize_ocr_payload(payload)` 改为 `self._normalize_ocr_payload(payload)`。
 
-**修改后的实例方法**：
+> **AI 框选路径（第 324 行）**：该行调用 `_normalize_ocr_payload(payload)['text']` 仅取文本，改为 `self._normalize_ocr_payload(payload)['text']` 后会执行段落检测但结果被丢弃，开销可忽略，行为正确，无需特殊处理。
+
+**修改后的实例方法**（返回值中增加 `para_texts` 字段，避免下游重复计算）：
 
 ```python
 def _normalize_ocr_payload(self, payload: dict) -> dict:
@@ -145,6 +150,7 @@ def _normalize_ocr_payload(self, payload: dict) -> dict:
     gap_ratio = float(self.settings.get('para_gap_ratio', 0.5))
 
     paras = []
+    para_texts = []
     if para_enabled and rows:
         paras = group_rows_into_paragraphs(rows, gap_ratio=gap_ratio)
 
@@ -155,24 +161,22 @@ def _normalize_ocr_payload(self, payload: dict) -> dict:
     else:
         text = payload.get('text', '')  # 原有空格连接
         paras = []
+        para_texts = []
 
     return {
         'text':       text,
         'rows':       rows,
-        'paragraphs': paras,   # 新增透传字段
+        'paragraphs': paras,       # 新增：段落对象列表
+        'para_texts': para_texts,  # 新增：各段纯文本列表，供 _on_ocr_done 直接使用
     }
 ```
 
-**`_on_ocr_done`** — 在已有的 overlay 段落写入后，追加：
+**`_on_ocr_done`** — 在已有的 overlay 段落写入后，追加（直接使用 `normalized_payload['para_texts']`，无需重复推导）：
 
 ```python
 # 暂存段落文本列表供 _on_translate_done 使用
 if box is not None:
-    paras = normalized_payload.get('paragraphs', [])
-    box._pending_para_texts = (
-        [' '.join(r['text'] for r in p['rows']) for p in paras]
-        if paras else []
-    )
+    box._pending_para_texts = normalized_payload.get('para_texts', [])
 ```
 
 **`_on_translate_done(result, box)`**（第 643 行版本）— 在现有 `if box is not None:` 块内追加：
@@ -254,7 +258,7 @@ def _format_para_text(self, paragraphs: list, key: str) -> str:
     return "\n".join(f"[{i+1}] {p[key]}" for i, p in enumerate(paragraphs))
 ```
 
-**`show_result` 修改**：
+**`show_result` 修改**（保留现有 `_source_dirty` 守护逻辑）：
 
 ```python
 def show_result(self, result: dict):
@@ -262,10 +266,13 @@ def show_result(self, result: dict):
     paras = result.get('paragraphs', [])
     if self._para_mode and paras:
         self._set_translation_text(self._format_para_text(paras, 'translation'))
-        self._set_source_text(self._format_para_text(paras, 'text'), mark_clean=True)
+        # 保留现有守护：用户已手动编辑原文时不覆盖
+        if not self._source_dirty or not self.current_source_text():
+            self._set_source_text(self._format_para_text(paras, 'text'), mark_clean=True)
     else:
         self._set_translation_text(result.get('translated', ''))
-        self._set_source_text(result.get('original', ''), mark_clean=True)
+        if not self._source_dirty or not self.current_source_text():
+            self._set_source_text(result.get('original', ''), mark_clean=True)
     self._update_para_button()
     ...
 ```
