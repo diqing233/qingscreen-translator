@@ -373,6 +373,8 @@ class CoreController(QObject):
         setattr(box, '_last_paragraph_translations', [])
         setattr(box, '_paragraph_translation_pending', False)
         setattr(box, '_pending_paragraph_translations', [])
+        # 分段翻译：暂存段落文本列表，供 _on_translate_done 配对译文
+        box._pending_para_texts = payload.get('para_texts', [])
         if text == '\x00LOW_CONTRAST':
             self.result_bar.show_error('所选区域无有效文字（图像近乎空白），请重新框选含文字的区域')
             box.start_dismiss_timer()
@@ -615,6 +617,22 @@ class CoreController(QObject):
             )
         except Exception as e:
             logger.warning(f'History save failed: {e}')
+
+        # ── 分段翻译：配对原文段落与译文段落 ──────────────────
+        if box is not None:
+            pending = getattr(box, '_pending_para_texts', [])
+            if pending:
+                parts = result.get('translated', '').split('\n\n')
+                if len(parts) == len(pending):
+                    result['paragraphs'] = [
+                        {'text': orig, 'translation': trans}
+                        for orig, trans in zip(pending, parts)
+                    ]
+                else:
+                    result['paragraphs'] = []
+                box._pending_para_texts = []
+        result.setdefault('paragraphs', [])
+        # ────────────────────────────────────────────────────
 
         if box is not None and self._box_mode == 'multi':
             self._multi_results[box.box_id] = result
