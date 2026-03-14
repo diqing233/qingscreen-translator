@@ -1038,33 +1038,6 @@ class ResultBar(QWidget):
         for key, btn in self._mode_btns.items():
             btn.setToolTip(hints.get(key, ''))
 
-    def show_result(self, result: dict):
-        self._current_result = result
-        self._lbl_explain.setVisible(False)
-        self._btn_explain_hdr.setVisible(False)
-        self._lbl_explain_loading.setVisible(False)
-        self._source_expanded = False
-        self._lbl_source.setVisible(False)
-        self._btn_source.setText('原文 ▼')
-
-        self._lbl_translation.setPlainText(result.get('translated', ''))
-        self._update_translation_height()
-        self._update_translation_height()
-        self._lbl_source.setText(result.get('original', ''))
-        self._lbl_backend.setText(f"来源: {result.get('backend', '')}")
-
-        # 更新源语言按钮显示检测到的语言
-        src = result.get('source_lang', '')
-        if src:
-            src_short = next((s for c, s, _ in SOURCE_LANGS
-                              if c == src.lower() or c == src.lower().split('-')[0]), src.upper())
-            self._btn_src_lang.setText(f'{src_short} ▾')
-            self._refresh_toolbar_layout()
-
-        if not self.isVisible() and not self._hidden_to_tray:
-            self.show()
-        self._smart_adjust()
-
     def show_multi_results(self, results: list):
         """多框模式：把各框译文合并展示，用分隔线隔开。"""
         if not results:
@@ -1208,6 +1181,7 @@ class ResultBar(QWidget):
         self._update_ai_button()
         self._apply_splitter_sizes()
         self._smart_adjust()
+        self._update_para_button()
 
     def show_result(self, result: dict):
         self._current_result = result
@@ -1234,13 +1208,13 @@ class ResultBar(QWidget):
             self._toggle_panel(self._source_panel, True)
         else:
             self._apply_splitter_sizes()
-        self._lbl_backend.setText(f"鏉ユ簮: {result.get('backend', '')}")
+        self._lbl_backend.setText(f"来源: {result.get('backend', '')}")
 
         src = result.get('source_lang', '')
         if src:
             src_short = next((s for c, s, _ in SOURCE_LANGS
                               if c == src.lower() or c == src.lower().split('-')[0]), src.upper())
-            self._btn_src_lang.setText(f'{src_short} 鈻?')
+            self._btn_src_lang.setText(f'{src_short} ▾')
             self._refresh_toolbar_layout()
 
         if not self.isVisible() and not self._hidden_to_tray:
