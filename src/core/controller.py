@@ -561,6 +561,7 @@ class CoreController(QObject):
             self._settings_win.settings_saved.connect(self.result_bar.apply_settings)
             self._settings_win.settings_saved.connect(self._reload_hotkeys)
             self._settings_win.settings_saved.connect(self._refresh_overlay_font_styles)
+            self._settings_win.settings_saved.connect(self.result_bar.sync_para_mode_from_settings)
             self._settings_win.show()
         else:
             self._settings_win.activateWindow()
