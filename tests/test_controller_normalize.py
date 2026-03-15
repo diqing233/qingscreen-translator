@@ -126,3 +126,12 @@ def test_parse_single_empty_text_returns_empty():
     """count=1 但文本为空时返回空列表。"""
     from core.controller import _parse_paragraph_translations
     assert _parse_paragraph_translations("", 1) == []
+
+
+def test_parse_level1_fail_level2_success():
+    """Level 1 编号数量不符，回退到 Level 2 双换行分割成功。"""
+    from core.controller import _parse_paragraph_translations
+    # Level 1: regex finds 1 item ("a") ≠ count 2 → skip
+    # Level 2: split by \n\n → ["1. a", "Second para"] → count 2 → use
+    text = "1. a\n\nSecond para"
+    assert _parse_paragraph_translations(text, 2) == ["1. a", "Second para"]

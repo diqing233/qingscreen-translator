@@ -7,14 +7,15 @@ logger = logging.getLogger(__name__)
 
 
 def _parse_paragraph_translations(text: str, count: int) -> list:
-    """将译文拆分为 count 个段落字符串，四级回退。
+    """将译文拆分为 count 个段落字符串，三级分割回退，全部失败返回 []。
 
     Level 1: 编号列表正则（1. / 1)）
     Level 2: 双换行分割
     Level 3: 单换行分割
-    Level 4: 失败 → 返回 []
     每级仅当结果数量恰好等于 count 时才采用。
     """
+    if not isinstance(text, str):
+        text = ''
     if count <= 0:
         return []
     if count == 1:
