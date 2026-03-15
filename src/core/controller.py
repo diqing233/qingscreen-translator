@@ -143,7 +143,7 @@ class CoreController(QObject):
 
         if para_enabled and len(paras) >= 2:
             para_texts = [' '.join(r['text'] for r in p['rows']) for p in paras]
-            text = '\n\n'.join(para_texts)
+            text = '\n'.join(f'{i + 1}. {t}' for i, t in enumerate(para_texts))
         else:
             text = str(payload.get('text', ''))
             paras = []
@@ -658,7 +658,9 @@ class CoreController(QObject):
         if box is not None:
             pending = getattr(box, '_pending_para_texts', [])
             if pending:
-                parts = result.get('translated', '').split('\n\n')
+                parts = _parse_paragraph_translations(
+                    result.get('translated', ''), len(pending)
+                )
                 if len(parts) == len(pending):
                     result['paragraphs'] = [
                         {'text': orig, 'translation': trans}
