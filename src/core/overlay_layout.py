@@ -119,8 +119,6 @@ def group_rows_into_paragraphs(rows, gap_ratio: float = 0.0):
 
     # 边界：0或1行时直接返回单段，无需计算阈值
     if len(lines) <= 1:
-        if not lines:
-            return []
         return [{'text': lines[0]['text'], 'rows': list(lines[0]['rows']), 'rect': dict(lines[0]['rect'])}]
 
     # 自适应阈值：收集所有行间距，取下中位数
@@ -129,6 +127,7 @@ def group_rows_into_paragraphs(rows, gap_ratio: float = 0.0):
         for i in range(1, len(lines))
     ]
     lower_median = sorted(gaps)[(len(gaps) - 1) // 2]
+    gap_ratio = max(0.0, gap_ratio)
     break_threshold = max(lower_median * 1.8, 6) * (1 + gap_ratio)
 
     paragraphs = []

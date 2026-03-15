@@ -62,7 +62,7 @@ def test_gap_ratio_larger_merges_more_paragraphs():
     rows = [
         {'text': 'Line 1', 'box': [[10, 10], [90, 10], [90, 24], [10, 24]]},
         {'text': 'Line 2', 'box': [[12, 28], [92, 28], [92, 42], [12, 42]]},
-        {'text': 'Line 3', 'box': [[10, 70], [90, 70], [90, 84], [10, 74]]},
+        {'text': 'Line 3', 'box': [[10, 70], [90, 70], [90, 84], [10, 84]]},
     ]
     paras = group_rows_into_paragraphs(rows, gap_ratio=3.0)
     assert len(paras) == 1
