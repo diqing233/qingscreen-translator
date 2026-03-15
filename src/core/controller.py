@@ -1,8 +1,42 @@
+import re
 import logging
 from PyQt5.QtWidgets import QApplication, QMessageBox, QCheckBox
 from PyQt5.QtCore import QObject, pyqtSignal, QTimer
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_paragraph_translations(text: str, count: int) -> list:
+    """将译文拆分为 count 个段落字符串，四级回退。
+
+    Level 1: 编号列表正则（1. / 1)）
+    Level 2: 双换行分割
+    Level 3: 单换行分割
+    Level 4: 失败 → 返回 []
+    每级仅当结果数量恰好等于 count 时才采用。
+    """
+    if count <= 0:
+        return []
+    if count == 1:
+        return [text.strip()] if text.strip() else []
+
+    # Level 1: 编号列表
+    parts = re.findall(r'^\d+[.)]\s*(.+)', text, re.MULTILINE)
+    parts = [p.strip() for p in parts if p.strip()]
+    if len(parts) == count:
+        return parts
+
+    # Level 2: 双换行
+    parts = [p.strip() for p in text.split('\n\n') if p.strip()]
+    if len(parts) == count:
+        return parts
+
+    # Level 3: 单换行
+    parts = [p.strip() for p in text.split('\n') if p.strip()]
+    if len(parts) == count:
+        return parts
+
+    return []
 
 
 def _fmt_hotkey(key_str: str) -> str:
