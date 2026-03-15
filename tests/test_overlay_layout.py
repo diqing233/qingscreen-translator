@@ -66,3 +66,32 @@ def test_gap_ratio_larger_merges_more_paragraphs():
     ]
     paras = group_rows_into_paragraphs(rows, gap_ratio=3.0)
     assert len(paras) == 1
+
+
+def test_small_font_detects_three_paragraphs():
+    """旧算法对14px字体全部合并为1段；新算法应正确拆出3段。"""
+    from core.overlay_layout import group_rows_into_paragraphs
+    # 3段：段内行间距4px，段落间距10px
+    rows = [
+        {'text': 'P1L1', 'box': [[0,   0], [100,   0], [100,  14], [0,  14]]},
+        {'text': 'P1L2', 'box': [[0,  18], [100,  18], [100,  32], [0,  32]]},
+        {'text': 'P1L3', 'box': [[0,  36], [100,  36], [100,  50], [0,  50]]},
+        {'text': 'P2L1', 'box': [[0,  60], [100,  60], [100,  74], [0,  74]]},
+        {'text': 'P2L2', 'box': [[0,  78], [100,  78], [100,  92], [0,  92]]},
+        {'text': 'P3L1', 'box': [[0, 102], [100, 102], [100, 116], [0, 116]]},
+        {'text': 'P3L2', 'box': [[0, 120], [100, 120], [100, 134], [0, 134]]},
+    ]
+    paragraphs = group_rows_into_paragraphs(rows)
+    assert len(paragraphs) == 3
+    assert paragraphs[0]['text'] == 'P1L1\nP1L2\nP1L3'
+    assert paragraphs[1]['text'] == 'P2L1\nP2L2'
+    assert paragraphs[2]['text'] == 'P3L1\nP3L2'
+
+
+def test_single_line_returns_one_paragraph():
+    """只有1行时不崩溃，返回单段。"""
+    from core.overlay_layout import group_rows_into_paragraphs
+    rows = [{'text': 'Only line', 'box': [[0, 0], [100, 0], [100, 14], [0, 14]]}]
+    paragraphs = group_rows_into_paragraphs(rows)
+    assert len(paragraphs) == 1
+    assert paragraphs[0]['text'] == 'Only line'

@@ -63,20 +63,17 @@ def _can_merge_rows_into_line(previous_rect, current_rect):
     return _horizontal_gap(previous_rect, current_rect) <= gap_threshold
 
 
-def _can_merge_lines(previous_rect, current_rect, gap_ratio: float = 0.0):
+def _can_merge_lines(previous_rect, current_rect, break_threshold: float) -> bool:
+    """Return True if two lines belong to the same paragraph."""
     vertical_gap = current_rect['y'] - _rect_bottom(previous_rect)
     if vertical_gap < 0:
         vertical_gap = 0
-
-    height_threshold = max(12, int(max(previous_rect['height'], current_rect['height']) * 1.6 * (1 + gap_ratio)))
-    if vertical_gap > height_threshold:
+    if vertical_gap > break_threshold:
         return False
-
     overlap = _horizontal_overlap(previous_rect, current_rect)
     min_width = max(1, min(previous_rect['width'], current_rect['width']))
     if overlap >= int(min_width * 0.15):
         return True
-
     indent_threshold = max(18, int(max(previous_rect['height'], current_rect['height']) * 2.5))
     return abs(previous_rect['x'] - current_rect['x']) <= indent_threshold
 
@@ -119,11 +116,26 @@ def group_rows_into_paragraphs(rows, gap_ratio: float = 0.0):
         return []
 
     lines = _group_rows_into_lines(normalized)
+
+    # 边界：0或1行时直接返回单段，无需计算阈值
+    if len(lines) <= 1:
+        if not lines:
+            return []
+        return [{'text': lines[0]['text'], 'rows': list(lines[0]['rows']), 'rect': dict(lines[0]['rect'])}]
+
+    # 自适应阈值：收集所有行间距，取下中位数
+    gaps = [
+        max(0, lines[i]['rect']['y'] - _rect_bottom(lines[i - 1]['rect']))
+        for i in range(1, len(lines))
+    ]
+    lower_median = sorted(gaps)[(len(gaps) - 1) // 2]
+    break_threshold = max(lower_median * 1.8, 6) * (1 + gap_ratio)
+
     paragraphs = []
     current = None
     previous_line = None
     for line in lines:
-        if current is None or not _can_merge_lines(previous_line['rect'], line['rect'], gap_ratio):
+        if current is None or not _can_merge_lines(previous_line['rect'], line['rect'], break_threshold):
             current = {
                 'text': line['text'],
                 'rows': list(line['rows']),
