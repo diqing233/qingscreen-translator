@@ -23,7 +23,7 @@ DEFAULTS = {
     'para_split_enabled': True,
     'para_gap_ratio': 0.5,
     'translation_order': ['dictionary', 'bing', 'google', 'baidu', 'deepl', 'zhipu', 'siliconflow', 'moonshot', 'deepseek', 'openai', 'claude', 'sogou', 'youdao'],
-    'enabled_backends': ['google', 'zhipu'],
+    'enabled_backends': ['bing', 'google', 'zhipu'],
     'api_keys': {
         'baidu_appid': '',
         'baidu_key': '',

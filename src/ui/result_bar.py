@@ -3,16 +3,16 @@ from PyQt5.QtWidgets import (QWidget, QMainWindow, QLabel, QPushButton,
                               QHBoxLayout, QVBoxLayout, QApplication,
                               QSizePolicy, QMenu, QAction, QTextEdit,
                               QScrollArea, QFrame, QSplitter)
-from PyQt5.QtCore import Qt, QPoint, QSize, pyqtSignal, QTimer, QEvent
-from PyQt5.QtGui import QFont, QPainter, QColor, QIcon, QPixmap
+from PyQt5.QtCore import Qt, QPoint, QRect, QSize, pyqtSignal, QTimer, QEvent
+from PyQt5.QtGui import QFont, QPainter, QPen, QColor, QIcon, QPixmap
 
 logger = logging.getLogger(__name__)
 
 # ── 数据常量 ─────────────────────────────────────────────────────
 
-DEFAULT_W, DEFAULT_H = 760, 140
+DEFAULT_W, DEFAULT_H = 600, 140
 
-BOX_MODE_ORDER = ['temp', 'fixed', 'multi']
+BOX_MODE_ORDER = ['fixed', 'temp', 'multi']
 BOX_MODE_META = {
     'temp': ('临时', '临时翻译：框选后立即翻译，N 秒后自动消失'),
     'fixed': ('固定', '固定翻译：框保留在屏幕上，可手动或自动翻译'),
@@ -20,10 +20,11 @@ BOX_MODE_META = {
     'ai': ('AI框', 'AI 框选：框选后直接进行 AI 解释，不走翻译'),
 }
 
-OVERLAY_MODE_ORDER = ['off', 'over', 'below']
+OVERLAY_MODE_ORDER = ['over', 'over_para', 'below', 'off']
 OVERLAY_MODE_META = {
     'off': '覆盖翻译：关闭',
-    'over': '覆盖翻译：显示在原文上',
+    'over': '覆盖翻译：显示在原文上（整体）',
+    'over_para': '覆盖翻译：显示在原文上（分段）',
     'below': '覆盖翻译：显示在原文下方',
 }
 
@@ -156,6 +157,105 @@ class TranslateToggle(QWidget):
             self.toggled.emit(self._auto)
 
 
+# ── 左右分割按钮 ─────────────────────────────────────────────────
+
+class _SplitButton(QWidget):
+    """左侧点击 → left_clicked，右侧点击 → right_clicked，中间一条竖线分隔。"""
+    left_clicked = pyqtSignal()
+    right_clicked = pyqtSignal()
+
+    _RIGHT_W = 20  # 右侧箭头区域固定宽度
+
+    def __init__(self, left_label: str, parent=None):
+        super().__init__(parent)
+        self._left_label = left_label
+        self._arrow = '▼'
+        self._hover_left = False
+        self._hover_right = False
+        self.setMouseTracking(True)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFixedHeight(22)
+        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+
+    def sizeHint(self):
+        left_w = self.fontMetrics().horizontalAdvance(self._left_label) + 16
+        return QSize(left_w + self._RIGHT_W + 1, 22)
+
+    def set_arrow(self, up: bool):
+        self._arrow = '▲' if up else '▼'
+        self.update()
+
+    def _divider_x(self) -> int:
+        return self.width() - self._RIGHT_W
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        w, h = self.width(), self.height()
+        div_x = self._divider_x()
+        enabled = self.isEnabled()
+        fade = 0.45 if not enabled else 1.0
+
+        def a(v):
+            return int(v * fade)
+
+        # 底色
+        painter.setPen(QPen(QColor(255, 255, 255, a(18)), 1))
+        painter.setBrush(QColor(55, 55, 70, a(180)))
+        painter.drawRoundedRect(0, 0, w - 1, h - 1, 4, 4)
+
+        # 悬停高亮（裁剪到对应半边）
+        if enabled and self._hover_left:
+            painter.save()
+            painter.setClipRect(QRect(0, 0, div_x, h))
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(255, 255, 255, 22))
+            painter.drawRoundedRect(0, 0, w - 1, h - 1, 4, 4)
+            painter.restore()
+        elif enabled and self._hover_right:
+            painter.save()
+            painter.setClipRect(QRect(div_x, 0, w - div_x, h))
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(255, 255, 255, 22))
+            painter.drawRoundedRect(0, 0, w - 1, h - 1, 4, 4)
+            painter.restore()
+
+        # 分割线
+        painter.setPen(QPen(QColor(255, 255, 255, a(50)), 1))
+        painter.drawLine(div_x, 3, div_x, h - 4)
+
+        # 左侧文字
+        text_color = (QColor(255, 255, 255, 230) if (enabled and self._hover_left)
+                      else QColor(200, 200, 210, a(220)))
+        painter.setPen(text_color)
+        painter.drawText(QRect(0, 0, div_x, h), Qt.AlignCenter, self._left_label)
+
+        # 右侧箭头
+        arrow_color = (QColor(255, 255, 255, 230) if (enabled and self._hover_right)
+                       else QColor(200, 200, 210, a(220)))
+        painter.setPen(arrow_color)
+        painter.drawText(QRect(div_x, 0, w - div_x, h), Qt.AlignCenter, self._arrow)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton and self.isEnabled():
+            if event.x() < self._divider_x():
+                self.left_clicked.emit()
+            else:
+                self.right_clicked.emit()
+
+    def mouseMoveEvent(self, event):
+        div_x = self._divider_x()
+        x = event.x()
+        new_left, new_right = x < div_x, x >= div_x
+        if new_left != self._hover_left or new_right != self._hover_right:
+            self._hover_left, self._hover_right = new_left, new_right
+            self.update()
+
+    def leaveEvent(self, event):
+        self._hover_left = self._hover_right = False
+        self.update()
+
+
 # ── 主结果条 ─────────────────────────────────────────────────────
 
 class ResultBar(QWidget):
@@ -186,7 +286,8 @@ class ResultBar(QWidget):
         self._drag_pos = QPoint()
         self._box_mode = 'fixed'
         self._overlay_mode = self.settings.get('overlay_default_mode', 'off')
-        self._para_mode: bool = bool(self.settings.get('para_split_enabled', True))
+        self._para_mode: bool = bool(self.settings.get('para_split_enabled', False))
+        self._show_para_numbers: bool = False
         self._translation_busy = False
         self._translate_mode = 'manual'
         self._hidden_to_tray = False
@@ -315,7 +416,7 @@ class ResultBar(QWidget):
         tb.addSpacing(4)
 
         # 左侧模式按钮
-        self._btn_box_mode_cycle = self._mode_btn(*BOX_MODE_META['temp'], 'temp')
+        self._btn_box_mode_cycle = self._mode_btn(*BOX_MODE_META['fixed'], 'fixed')
         self._btn_box_mode_cycle.clicked.disconnect()
         self._btn_box_mode_cycle.clicked.connect(self._cycle_box_mode)
         tb.addWidget(self._btn_box_mode_cycle)
@@ -367,6 +468,10 @@ class ResultBar(QWidget):
             'A+', '增大覆盖译文字号', lambda: self._adjust_overlay_font_delta(1)
         )
         tb.addWidget(self._btn_overlay_font_up)
+        self._btn_overlay_close = self._small_toolbar_btn(
+            '✕', '关闭覆盖翻译', lambda: self.set_overlay_mode('off')
+        )
+        tb.addWidget(self._btn_overlay_close)
 
         tb.addSpacing(6)
 
@@ -488,16 +593,17 @@ class ResultBar(QWidget):
             'color: rgba(160,160,185,190); font-size: 10px; padding: 0;'
         )
         self._resize_hint_lbl.setToolTip('拖拽此处（右下角 20px 范围）调整窗口大小')
-        self._btn_para = self._action_btn('分段 ▼', '切换分段/整体显示模式', self._toggle_para_mode)
-        self._btn_para.setEnabled(False)  # 初始无段落数据时置灰
         ar.addWidget(self._btn_source)
         ar.addWidget(self._btn_copy_src)
         self._btn_retranslate = self._action_btn('重新翻译', '使用当前原文内容重新翻译', self._on_retranslate)
         self._btn_retranslate.setEnabled(False)
         ar.addWidget(self._btn_retranslate)
-        self._btn_ai = self._action_btn('💬 AI科普', '科普当前原文内容（同 Alt+E）', self._on_explain)
+        self._btn_ai = _SplitButton('💬 AI科普')
+        self._btn_ai.left_clicked.connect(self._on_explain)
+        self._btn_ai.right_clicked.connect(self._toggle_explain_section)
         ar.addWidget(self._btn_ai)
-        ar.addWidget(self._btn_para)
+        self._btn_para_num = self._action_btn('[#]', '显示/隐藏段落编号', self._toggle_para_numbers)
+        ar.addWidget(self._btn_para_num)
         ar.addStretch()
         ar.addWidget(self._lbl_backend)
         ar.addSpacing(8)
@@ -572,7 +678,6 @@ class ResultBar(QWidget):
         ''')
         explain_layout.addWidget(self._explain_text)
 
-        self._content_splitter.setStretchFactor(0, 1)
         bl.addWidget(self._content_splitter, 1)
 
         cl.addWidget(self._body)
@@ -690,7 +795,7 @@ class ResultBar(QWidget):
         self._tb_widget.setFixedSize(self._tb_widget.sizeHint())
 
     def _detach_overlay_controls(self):
-        for name in ('_btn_overlay', '_btn_overlay_font_down', '_btn_overlay_font_up'):
+        for name in ('_btn_overlay', '_btn_overlay_font_down', '_btn_overlay_font_up', '_btn_overlay_close'):
             if not hasattr(self, name):
                 continue
             btn = getattr(self, name)
@@ -704,20 +809,6 @@ class ResultBar(QWidget):
         tooltip = '终止当前翻译' if busy else '清空当前翻译内容'
         self._btn_stop_clear.setToolTip(tooltip)
         self._btn_stop_clear.setStyleSheet(self._stop_clear_btn_style(busy))
-
-    def clear_current_content(self):
-        self._current_result = None
-        self._source_expanded = False
-        self._lbl_translation.setPlainText('等待翻译...')
-        self._lbl_backend.setText('')
-        self._lbl_source.clear()
-        self._lbl_source.setVisible(False)
-        self._btn_source.setText('原文 ▼')
-        self._lbl_explain_loading.setVisible(False)
-        self._lbl_explain.clear()
-        self._lbl_explain.setVisible(False)
-        self._btn_explain_hdr.setVisible(False)
-        self._smart_adjust()
 
     # ── 语言下拉菜单 ──────────────────────────────────────────────
 
@@ -775,6 +866,9 @@ class ResultBar(QWidget):
         self._btn_ai_mode.setStyleSheet(self._mode_btn_style(ai_active))
 
     def _on_mode_btn_click(self, key: str):
+        # 切换到 AI 框前记录当前模式，以便退出时恢复
+        if key == 'ai' and self._box_mode != 'ai':
+            self._prev_box_mode = self._box_mode
         self._box_mode = key
         self._set_active_mode_btn(key)
         self._toggle.setVisible(key != 'temp')
@@ -783,6 +877,12 @@ class ResultBar(QWidget):
         self._smart_adjust()
 
     def _cycle_box_mode(self):
+        # AI 框模式特殊处理：点击返回到进入 AI 框之前的模式
+        if self._box_mode == 'ai':
+            prev_mode = getattr(self, '_prev_box_mode', 'fixed')
+            self._on_mode_btn_click(prev_mode)
+            return
+
         try:
             index = BOX_MODE_ORDER.index(self._box_mode)
         except ValueError:
@@ -816,18 +916,19 @@ class ResultBar(QWidget):
         viewport_width = widget.viewport().width()
         if viewport_width <= 0:
             viewport_width = max(120, self.width() - 40)
-        document = widget.document()
-        document.setTextWidth(viewport_width)
-        document.adjustSize()
-        target = int(document.size().height()) + 10
+        doc = widget.document().clone()
+        doc.setTextWidth(viewport_width)
+        doc.adjustSize()
+        target = int(doc.size().height()) + 10
+        del doc
         target = max(min_height, min(max_height, target))
         return target
 
     def _preferred_translation_panel_height(self) -> int:
-        return self._sync_text_edit_height(self._lbl_translation, min_height=72, max_height=120)
+        return self._sync_text_edit_height(self._lbl_translation, min_height=72, max_height=9999)
 
     def _preferred_source_panel_height(self) -> int:
-        return self._sync_text_edit_height(self._source_editor, min_height=96, max_height=140)
+        return self._sync_text_edit_height(self._source_editor, min_height=96, max_height=9999)
 
     def _preferred_explain_panel_height(self) -> int:
         height = 0
@@ -869,32 +970,38 @@ class ResultBar(QWidget):
         return preferred_height
 
     def _apply_splitter_sizes(self, *, translation_height=None, source_height=None, explain_height=None):
+        # 翻译面板：始终贴合内容高度，不留空白
         if translation_height is None:
-            translation_height = self._current_panel_height(
-                self._translation_panel,
-                self._preferred_translation_panel_height(),
-            )
-        sizes = [max(72, int(translation_height))]
+            translation_height = self._preferred_translation_panel_height()
 
+        # 原文面板：始终贴合内容高度（如果可见）
         if source_height is None:
             source_height = (
-                self._current_panel_height(self._source_panel, self._preferred_source_panel_height())
+                self._preferred_source_panel_height()
                 if self._panel_in_content_splitter(self._source_panel)
                 else 0
             )
+
+        sizes = [max(72, int(translation_height))]
         if self._panel_in_content_splitter(self._source_panel):
             sizes.append(max(96, int(source_height)))
 
-        if explain_height is None:
-            explain_height = (
-                self._current_panel_height(self._explain_panel, self._preferred_explain_panel_height())
-                if self._panel_in_content_splitter(self._explain_panel)
-                else 0
-            )
+        # AI 科普面板：填充窗口剩余所有空间
         if self._panel_in_content_splitter(self._explain_panel):
-            sizes.append(max(96, int(explain_height)))
+            if explain_height is None:
+                splitter_h = self._content_splitter.height()
+                if splitter_h > 0:
+                    handles = (self._content_splitter.count() - 1) * self._content_splitter.handleWidth()
+                    explain_height = max(40, splitter_h - sum(sizes) - handles)
+                else:
+                    explain_height = self._preferred_explain_panel_height()
+            sizes.append(max(40, int(explain_height)))
 
         self._content_splitter.setSizes(sizes)
+        # 翻译/原文面板不随窗口拉伸；AI 科普面板（最后一项）填充剩余空间
+        n = self._content_splitter.count()
+        for i in range(n):
+            self._content_splitter.setStretchFactor(i, 1 if i == n - 1 else 0)
 
     def _update_translation_height(self):
         self._preferred_translation_panel_height()
@@ -933,30 +1040,14 @@ class ResultBar(QWidget):
             if panel is self._source_panel
             else self._preferred_explain_panel_height()
         )
-        translation_height = self._current_panel_height(
-            self._translation_panel,
-            self._preferred_translation_panel_height(),
-        )
-        source_height = (
-            self._current_panel_height(self._source_panel, self._preferred_source_panel_height())
-            if self._panel_in_content_splitter(self._source_panel)
-            else 0
-        )
-        explain_height = (
-            self._current_panel_height(self._explain_panel, self._preferred_explain_panel_height())
-            if self._panel_in_content_splitter(self._explain_panel)
-            else 0
-        )
 
         if visible:
             already_visible = self._panel_in_content_splitter(panel)
             if panel is self._source_panel:
                 self._insert_content_panel(self._source_panel, 1)
-                source_height = max(source_height, preferred_height)
             else:
                 explain_index = 2 if self._panel_in_content_splitter(self._source_panel) else 1
                 self._insert_content_panel(self._explain_panel, explain_index)
-                explain_height = max(explain_height, preferred_height)
             if not already_visible:
                 self._resize_preserving_top(self.height() + preferred_height + self._content_splitter.handleWidth())
         else:
@@ -964,25 +1055,22 @@ class ResultBar(QWidget):
                 return
             current_height = self._current_panel_height(panel, preferred_height)
             self._remove_content_panel(panel)
-            if panel is self._source_panel:
-                source_height = 0
-            else:
-                explain_height = 0
             self._resize_preserving_top(
                 max(self.minimumHeight(), self.height() - current_height - self._content_splitter.handleWidth())
             )
 
-        self._apply_splitter_sizes(
-            translation_height=translation_height,
-            source_height=source_height,
-            explain_height=explain_height,
-        )
+        # 翻译/原文由 _apply_splitter_sizes 自动贴合内容高度；
+        # 新展开 explain 时传入初始高度，其余情况自动计算
+        if visible and panel is self._explain_panel:
+            self._apply_splitter_sizes(explain_height=preferred_height)
+        else:
+            self._apply_splitter_sizes()
 
     def _update_source_button(self):
         self._btn_source.setText('原文 ▲' if self._source_expanded else '原文 ▼')
 
     def _update_ai_button(self):
-        self._btn_ai.setText('💬 AI科普 ▲' if self._explain_expanded else '💬 AI科普 ▼')
+        self._btn_ai.set_arrow(self._explain_expanded)
 
     def _on_source_text_changed(self):
         if not self._syncing_source_editor:
@@ -1002,6 +1090,8 @@ class ResultBar(QWidget):
             # 用户通过拖拽手柄改变了大小
             self._manual_size = True
             self._save_timer.start()
+            # 重新分配：翻译/原文贴内容，AI 科普填充剩余
+            self._apply_splitter_sizes()
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -1011,6 +1101,10 @@ class ResultBar(QWidget):
         self._update_translation_height()
         self._update_explain_height()
         self._apply_splitter_sizes()
+
+    def enterEvent(self, event):
+        self.raise_()
+        super().enterEvent(event)
 
     def refresh_opacity(self):
         self._apply_opacity()
@@ -1069,6 +1163,10 @@ class ResultBar(QWidget):
         self._btn_explain_hdr.setVisible(True)
         self._smart_adjust()
 
+    def show_ocr_text(self, text: str):
+        """OCR 识别完成后立即填入原文；翻译期间用户可点「原文」查看。"""
+        self._set_source_text(text, mark_clean=True)
+
     def show_loading(self, msg: str = '翻译中...'):
         self._lbl_translation.setPlainText(msg)
         self._update_translation_height()
@@ -1114,6 +1212,16 @@ class ResultBar(QWidget):
         if not hasattr(self, '_btn_overlay'):
             return
         self._btn_overlay.setToolTip(OVERLAY_MODE_META.get(self._overlay_mode, OVERLAY_MODE_META['off']))
+
+        # 控制覆盖相关按钮的显示
+        overlay_active = self._overlay_mode != 'off'
+        if hasattr(self, '_btn_overlay_font_down'):
+            self._btn_overlay_font_down.setVisible(overlay_active)
+        if hasattr(self, '_btn_overlay_font_up'):
+            self._btn_overlay_font_up.setVisible(overlay_active)
+        if hasattr(self, '_btn_overlay_close'):
+            self._btn_overlay_close.setVisible(overlay_active)
+
         if self._overlay_mode == 'off':
             self._btn_overlay.setStyleSheet('''
                 QPushButton { background: transparent; color: rgba(160,160,180,200);
@@ -1152,22 +1260,13 @@ class ResultBar(QWidget):
             text = self._current_result.get('translated', '')
         self.overlay_requested.emit(self._overlay_mode, text)
 
-    def _on_explain(self):
-        if self._current_result is None:
-            # 结果条尚无内容，先自动触发框选
-            self.start_selection_requested.emit()
-            return
-        text = self._current_result.get('original', '')
-        if text:
-            self.explain_requested.emit(text)
-
     def clear_current_content(self):
         self._current_result = None
         self._source_expanded = False
         self._explain_expanded = False
         self._source_dirty = False
         self._synced_source_text = ''
-        self._lbl_translation.setPlainText('绛夊緟缈昏瘧...')
+        self._lbl_translation.setPlainText('等待翻译...')
         self._lbl_backend.setText('')
         self._set_source_text('', mark_clean=True)
         self._update_translation_height()
@@ -1181,7 +1280,6 @@ class ResultBar(QWidget):
         self._update_ai_button()
         self._apply_splitter_sizes()
         self._smart_adjust()
-        self._update_para_button()
 
     def show_result(self, result: dict):
         self._current_result = result
@@ -1198,12 +1296,15 @@ class ResultBar(QWidget):
             self._lbl_translation.setPlainText(self._format_para_text(paras, 'translation'))
             if not self._source_dirty or not self.current_source_text():
                 self._set_source_text(self._format_para_text(paras, 'text'), mark_clean=True)
+        elif paras:
+            self._lbl_translation.setPlainText('\n'.join(p['translation'] for p in paras))
+            if not self._source_dirty or not self.current_source_text():
+                self._set_source_text('\n'.join(p['text'] for p in paras), mark_clean=True)
         else:
             self._lbl_translation.setPlainText(result.get('translated', ''))
             if not self._source_dirty or not self.current_source_text():
                 self._set_source_text(result.get('original', ''), mark_clean=True)
         self._update_translation_height()
-        self._update_para_button()
         if self._source_expanded:
             self._toggle_panel(self._source_panel, True)
         else:
@@ -1240,25 +1341,27 @@ class ResultBar(QWidget):
         self._update_ai_button()
 
     def _format_para_text(self, paragraphs: list, key: str) -> str:
-        return "\n".join(f"[{i+1}] {p[key]}" for i, p in enumerate(paragraphs))
+        if self._show_para_numbers:
+            return "\n".join(f"[{i+1}] {p[key]}" for i, p in enumerate(paragraphs))
+        return "\n".join(p[key] for p in paragraphs)
 
-    def _update_para_button(self):
-        has_paras = bool(
-            self._current_result and self._current_result.get('paragraphs')
-        )
-        self._btn_para.setText('分段 ▲' if self._para_mode else '分段 ▼')
-        self._btn_para.setEnabled(has_paras)
-
-    def _toggle_para_mode(self):
-        self._para_mode = not self._para_mode
-        self._source_dirty = False  # 用户主动切换格式，清除编辑保护
-        self._update_para_button()
+    def _toggle_para_numbers(self):
+        self._show_para_numbers = not self._show_para_numbers
+        active = self._show_para_numbers
+        self._btn_para_num.setStyleSheet(f'''
+            QPushButton {{
+                background: {"rgba(80,140,255,200)" if active else "rgba(55,55,70,180)"};
+                color: white;
+                border: 1px solid {"rgba(120,170,255,180)" if active else "rgba(255,255,255,18)"};
+                border-radius: 4px; padding: 2px 8px; font-size: 11px;
+            }}
+            QPushButton:hover {{ background: {"rgba(100,160,255,220)" if active else "rgba(75,75,100,210)"}; color: white; }}
+        ''')
         if self._current_result:
             self.show_result(self._current_result)
 
     def sync_para_mode_from_settings(self):
-        self._para_mode = bool(self.settings.get('para_split_enabled', True))
-        self._update_para_button()
+        self._para_mode = bool(self.settings.get('para_split_enabled', False))
         if self._current_result:
             self.show_result(self._current_result)
 
@@ -1386,6 +1489,6 @@ class ResultBar(QWidget):
         current_label = BOX_MODE_META.get(self._box_mode, BOX_MODE_META['temp'])[0]
         self._btn_box_mode_cycle.setToolTip(
             f'框模式循环切换（当前：{current_label}）'
-            f' [临时 {hk_temp} / 固定 {hk_fixed} / 多框 {hk_multi}]'
+            f' [固定 {hk_fixed} / 临时 {hk_temp} / 多框 {hk_multi}]'
         )
         self._btn_ai_mode.setToolTip(f'{BOX_MODE_META["ai"][1]}  [{hk_ai}]')

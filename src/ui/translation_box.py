@@ -2,6 +2,14 @@ from PyQt5.QtCore import QPoint, QRect, QTimer, Qt, pyqtSignal
 from PyQt5.QtGui import QColor, QCursor, QPainter, QPen
 from PyQt5.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
+_RESIZE_MARGIN = 8
+_RESIZE_CURSORS = {
+    'nw': Qt.SizeFDiagCursor, 'ne': Qt.SizeBDiagCursor,
+    'sw': Qt.SizeBDiagCursor, 'se': Qt.SizeFDiagCursor,
+    'n':  Qt.SizeVerCursor,   's':  Qt.SizeVerCursor,
+    'w':  Qt.SizeHorCursor,   'e':  Qt.SizeHorCursor,
+}
+
 
 class _SubtitleWindow(QWidget):
     def __init__(self, parent=None):
@@ -93,8 +101,9 @@ class TranslationBox(QWidget):
 
     OVERLAY_OFF = "off"
     OVERLAY_OVER = "over"
+    OVERLAY_OVER_PARA = "over_para"
     OVERLAY_BELOW = "below"
-    OVERLAY_CYCLE = [OVERLAY_OVER, OVERLAY_BELOW, OVERLAY_OFF]
+    OVERLAY_CYCLE = [OVERLAY_OVER, OVERLAY_OVER_PARA, OVERLAY_BELOW, OVERLAY_OFF]
 
     def __init__(self, rect: QRect, box_id: int, settings, parent=None):
         super().__init__(parent)
@@ -130,6 +139,10 @@ class TranslationBox(QWidget):
         self._hover_timer.setInterval(50)
         self._hover_timer.timeout.connect(self._refresh_toolbar_visibility)
 
+        self._resize_dir = ''
+        self._resize_start_global = QPoint()
+        self._resize_start_geom = QRect()
+
         self._setup_ui()
         self._setup_window(rect)
         self._update_pin_button()
@@ -140,7 +153,6 @@ class TranslationBox(QWidget):
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_AlwaysShowToolTips, True)
         self.setMouseTracking(True)
-        self.setMinimumSize(80, 50)
         self.setGeometry(rect)
 
     def _setup_ui(self):
@@ -148,13 +160,13 @@ class TranslationBox(QWidget):
         layout.setContentsMargins(6, 6, 6, 6)
         layout.setSpacing(2)
 
+        # 左上角主按钮栏
         self._btn_bar = QWidget(self)
         btn_layout = QHBoxLayout(self._btn_bar)
         btn_layout.setContentsMargins(0, 0, 0, 0)
         btn_layout.setSpacing(2)
 
         self._btn_translate = self._make_btn("译", "立即翻译", lambda: self.translate_requested.emit(self))
-        self._btn_para = self._make_btn("¶", "切换分段显示", self._on_toggle_para)
         self._btn_pin = self._make_btn("钉", "固定/取消固定", self._on_toggle_pin)
         self._btn_subtitle = self._make_btn("⊞", "覆盖翻译", self._on_toggle_subtitle)
         self._btn_overlay_font_down = self._make_btn(
@@ -169,23 +181,40 @@ class TranslationBox(QWidget):
             lambda: self._adjust_overlay_font_delta(1),
             width=24,
         )
-        self._btn_hide = self._make_btn("隐", "隐藏", self.hide)
-        self._btn_close = self._make_btn("✕", "关闭", lambda: self.close_requested.emit(self))
+        self._btn_overlay_close = self._make_btn("✕", "关闭覆盖翻译", lambda: self.set_overlay_mode(self.OVERLAY_OFF), width=24)
 
         for btn in [
             self._btn_translate,
-            self._btn_para,
             self._btn_pin,
             self._btn_subtitle,
             self._btn_overlay_font_down,
             self._btn_overlay_font_up,
-            self._btn_hide,
-            self._btn_close,
+            self._btn_overlay_close,
         ]:
             btn_layout.addWidget(btn)
         btn_layout.addStretch()
         self._btn_bar.setVisible(False)
+
+        # 初始隐藏覆盖相关按钮
+        self._btn_overlay_font_down.setVisible(False)
+        self._btn_overlay_font_up.setVisible(False)
+        self._btn_overlay_close.setVisible(False)
+
         layout.addWidget(self._btn_bar)
+
+        # 右上角关闭按钮组
+        self._corner_bar = QWidget(self)
+        corner_layout = QHBoxLayout(self._corner_bar)
+        corner_layout.setContentsMargins(0, 0, 0, 0)
+        corner_layout.setSpacing(2)
+
+        self._btn_hide = self._make_btn("隐", "隐藏", self.hide)
+        self._btn_close = self._make_btn("✕", "关闭", lambda: self.close_requested.emit(self))
+
+        corner_layout.addWidget(self._btn_hide)
+        corner_layout.addWidget(self._btn_close)
+        self._corner_bar.setVisible(False)
+        self._corner_bar.raise_()
 
         self._ocr_label = QLabel("")
         self._ocr_label.setStyleSheet("color: rgba(220,220,220,160); font-size: 10px;")
@@ -210,7 +239,7 @@ class TranslationBox(QWidget):
         return btn
 
     def _normalize_overlay_mode(self, mode: str) -> str:
-        if mode in {self.OVERLAY_OFF, self.OVERLAY_OVER, self.OVERLAY_BELOW}:
+        if mode in {self.OVERLAY_OFF, self.OVERLAY_OVER, self.OVERLAY_OVER_PARA, self.OVERLAY_BELOW}:
             return mode
         return self.OVERLAY_OFF
 
@@ -320,6 +349,14 @@ class TranslationBox(QWidget):
 
     def _raise_toolbar(self):
         self._btn_bar.raise_()
+        self._corner_bar.raise_()
+
+    def _position_corner_bar(self):
+        self._corner_bar.adjustSize()
+        w = self._corner_bar.sizeHint().width()
+        h = self._corner_bar.sizeHint().height()
+        x = self.width() - w - 6
+        self._corner_bar.setGeometry(x, 6, w, h)
 
     def _over_fallback_rect(self) -> QRect:
         left = 2
@@ -344,7 +381,7 @@ class TranslationBox(QWidget):
 
     def _can_render_paragraph_subtitles(self) -> bool:
         return (
-            self._subtitle_mode == self.OVERLAY_OVER
+            self._subtitle_mode == self.OVERLAY_OVER_PARA
             and bool(self._last_ocr_paragraphs)
             and len(self._last_ocr_paragraphs) == len(self._last_paragraph_translations)
             and all(self._last_paragraph_translations)
@@ -400,7 +437,7 @@ class TranslationBox(QWidget):
         for win in self._subtitle_paragraph_wins:
             win.hide()
 
-        if self._subtitle_mode == self.OVERLAY_OVER:
+        if self._subtitle_mode in (self.OVERLAY_OVER, self.OVERLAY_OVER_PARA):
             if self._subtitle_win is not None:
                 self._subtitle_win.hide()
             win = self._ensure_single_inbox_subtitle_win()
@@ -448,7 +485,7 @@ class TranslationBox(QWidget):
         self._subtitle_paragraph_wins = []
 
     def _layout_subtitles(self):
-        if self._subtitle_mode == self.OVERLAY_OVER and self._can_render_paragraph_subtitles():
+        if self._subtitle_mode == self.OVERLAY_OVER_PARA and self._can_render_paragraph_subtitles():
             self._show_paragraph_subtitles()
             return
         if self._last_translation:
@@ -456,11 +493,18 @@ class TranslationBox(QWidget):
 
     def _update_subtitle_button(self):
         tips = {
-            self.OVERLAY_OFF: "覆盖翻译：关闭，点击切到原文上",
-            self.OVERLAY_OVER: "覆盖翻译：原文上，点击切到原文下方",
+            self.OVERLAY_OFF: "覆盖翻译：关闭，点击切到原文上（整体）",
+            self.OVERLAY_OVER: "覆盖翻译：原文上（整体），点击切到分段",
+            self.OVERLAY_OVER_PARA: "覆盖翻译：原文上（分段），点击切到原文下方",
             self.OVERLAY_BELOW: "覆盖翻译：原文下方，点击关闭",
         }
-        self._btn_subtitle.setToolTip(tips[self._subtitle_mode])
+        self._btn_subtitle.setToolTip(tips.get(self._subtitle_mode, tips[self.OVERLAY_OFF]))
+
+        # 控制覆盖相关按钮的显示
+        overlay_active = self._subtitle_mode != self.OVERLAY_OFF
+        self._btn_overlay_font_down.setVisible(overlay_active)
+        self._btn_overlay_font_up.setVisible(overlay_active)
+        self._btn_overlay_close.setVisible(overlay_active)
 
         if self._subtitle_mode == self.OVERLAY_OFF:
             self._btn_subtitle.setStyleSheet(
@@ -602,12 +646,6 @@ class TranslationBox(QWidget):
         if self._subtitle_mode != self.OVERLAY_OFF and self._last_translation:
             self.show_subtitle(self._last_translation)
 
-    def _on_toggle_para(self):
-        self._para_mode = not getattr(self, '_para_mode', False)
-        style_on  = self._btn_subtitle.property('active_style') or ''
-        style_off = ''
-        self._btn_para.setStyleSheet(style_on if self._para_mode else style_off)
-
     def _on_dismiss_timeout(self):
         if self.mode == self.MODE_TEMP and not self._position_locked:
             self.close_requested.emit(self)
@@ -620,10 +658,52 @@ class TranslationBox(QWidget):
             global_pos = QCursor.pos()
         visible = self.isVisible() and self._box_global_rect().contains(global_pos)
         self._btn_bar.setVisible(visible)
+        self._corner_bar.setVisible(visible)
         if visible:
             self._raise_toolbar()
+            self._position_corner_bar()
+
+    def _can_resize(self) -> bool:
+        return self.mode == self.MODE_FIXED or self._position_locked
+
+    def _resize_direction(self, pos: QPoint) -> str:
+        if not self._can_resize():
+            return ''
+        x, y, w, h = pos.x(), pos.y(), self.width(), self.height()
+        m = _RESIZE_MARGIN
+        left   = x < m
+        right  = x > w - m
+        top    = y < m
+        bottom = y > h - m
+        if top and left:     return 'nw'
+        if top and right:    return 'ne'
+        if bottom and left:  return 'sw'
+        if bottom and right: return 'se'
+        if left:   return 'w'
+        if right:  return 'e'
+        if top:    return 'n'
+        if bottom: return 's'
+        return ''
+
+    def _do_resize(self, global_pos: QPoint):
+        dx = global_pos.x() - self._resize_start_global.x()
+        dy = global_pos.y() - self._resize_start_global.y()
+        geom = QRect(self._resize_start_geom)
+        d = self._resize_dir
+        min_w, min_h = self.minimumWidth(), self.minimumHeight()
+        if 'e' in d:
+            geom.setRight(max(geom.left() + min_w, geom.right() + dx))
+        if 's' in d:
+            geom.setBottom(max(geom.top() + min_h, geom.bottom() + dy))
+        if 'w' in d:
+            geom.setLeft(min(geom.right() - min_w, geom.left() + dx))
+        if 'n' in d:
+            geom.setTop(min(geom.bottom() - min_h, geom.top() + dy))
+        self.setGeometry(geom)
+        self.region = geom
 
     def enterEvent(self, event):
+        self.raise_()
         self._refresh_toolbar_visibility()
 
     def leaveEvent(self, event):
@@ -643,20 +723,42 @@ class TranslationBox(QWidget):
         painter.drawRect(0, 0, self.width() - 1, self.height() - 1)
 
     def mousePressEvent(self, event):
-        if self._position_locked:
-            self._drag_pos = QPoint()
-            return
         if event.button() == Qt.LeftButton:
+            direction = self._resize_direction(event.pos())
+            if direction:
+                self._resize_dir = direction
+                self._resize_start_global = event.globalPos()
+                self._resize_start_geom = self.geometry()
+                self._drag_pos = QPoint()
+                return
+            if self._position_locked:
+                self._drag_pos = QPoint()
+                return
             self._drag_pos = event.globalPos() - self.frameGeometry().topLeft()
+        else:
+            self._resize_dir = ''
 
     def mouseMoveEvent(self, event):
         self._refresh_toolbar_visibility(event.globalPos())
+        if self._resize_dir:
+            self._do_resize(event.globalPos())
+            return
+        direction = self._resize_direction(event.pos())
+        if direction:
+            self.setCursor(QCursor(_RESIZE_CURSORS[direction]))
+        else:
+            self.unsetCursor()
         if self._position_locked:
             return
         if event.buttons() == Qt.LeftButton and not self._drag_pos.isNull():
             new_pos = event.globalPos() - self._drag_pos
             self.move(new_pos)
             self.region = QRect(new_pos.x(), new_pos.y(), self.width(), self.height())
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._resize_dir = ''
+            self._drag_pos = QPoint()
 
     def moveEvent(self, event):
         super().moveEvent(event)
@@ -666,6 +768,7 @@ class TranslationBox(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        self._position_corner_bar()
         self._refresh_toolbar_visibility()
         if self._subtitle_active:
             self.refresh_overlay_style()
@@ -674,6 +777,7 @@ class TranslationBox(QWidget):
         super().hideEvent(event)
         self._hover_timer.stop()
         self._btn_bar.setVisible(False)
+        self._corner_bar.setVisible(False)
         self._hide_all_subtitles()
 
     def showEvent(self, event):

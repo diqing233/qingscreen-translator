@@ -6,7 +6,8 @@
       "Bash(pip install PyQt5 mss pynput \"googletrans==4.0.0rc1\" deepl openai anthropic nltk requests)",
       "Bash(git init)",
       "Bash(git add .)",
-      "Bash(git commit -m \"feat: initial project structure and requirements\")"
+      "Bash(git commit -m \"feat: initial project structure and requirements\")",
+      "Bash(python -m py_compile src/ui/translation_box.py src/ui/result_bar.py src/core/controller.py src/ui/settings_window.py)"
     ]
   }
 }

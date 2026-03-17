@@ -17,7 +17,7 @@ BACKEND_LABELS = {
     'deepseek':     '🤖 DeepSeek AI',
     'openai':       '🤖 OpenAI GPT',
     'claude':       '🤖 Claude AI',
-    'sogou':        '🟠 搜狗翻译（免费，国内直连）',
+    'sogou':        '🟠 搜狗翻译（免费，国内直连，暂不可用）',
     'youdao':       '🟡 有道翻译（已封锁非官方调用，暂不可用）',
 }
 
@@ -30,7 +30,10 @@ class SettingsWindow(QDialog):
         self.settings = settings
         self.setWindowTitle('ScreenTranslator - 设置')
         self.setMinimumWidth(520)
-        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+        self.setWindowFlags(
+            self.windowFlags() & ~Qt.WindowContextHelpButtonHint
+            | Qt.WindowStaysOnTopHint
+        )
         self._setup_ui()
         self._load_values()
 
@@ -81,7 +84,8 @@ class SettingsWindow(QDialog):
 
         self._combo_overlay_default_mode = QComboBox()
         self._combo_overlay_default_mode.addItem('关闭', 'off')
-        self._combo_overlay_default_mode.addItem('覆盖在原文上', 'over')
+        self._combo_overlay_default_mode.addItem('覆盖在原文上（整体）', 'over')
+        self._combo_overlay_default_mode.addItem('覆盖在原文上（分段）', 'over_para')
         self._combo_overlay_default_mode.addItem('显示在原文下方', 'below')
         form.addRow('覆盖翻译默认模式', self._combo_overlay_default_mode)
 
@@ -211,27 +215,74 @@ class SettingsWindow(QDialog):
 
         # ── API 密钥 ──────────────────────────────────────────
         key_tab = QWidget()
-        key_form = QFormLayout(key_tab)
+        key_layout = QVBoxLayout(key_tab)
+        key_layout.setSpacing(4)
+        key_layout.setContentsMargins(8, 8, 8, 4)
+
+        tip_label = QLabel('💡 点击右侧"获取密钥"直接跳转到对应平台申请页面，悬停输入框可查看说明。'
+                           '国内推荐优先使用 <b>智谱（永久免费）</b>，注册即用，无需梯子。')
+        tip_label.setTextFormat(Qt.RichText)
+        tip_label.setWordWrap(True)
+        tip_label.setStyleSheet('color: #888; font-size: 11px; padding: 2px 0 6px 0;')
+        key_layout.addWidget(tip_label)
+
+        key_form_widget = QWidget()
+        key_form = QFormLayout(key_form_widget)
         key_form.setSpacing(6)
+        key_layout.addWidget(key_form_widget)
+        key_layout.addStretch()
 
         self._key_fields = {}
         key_configs = [
-            ('baidu_appid',      '百度 AppID:'),
-            ('baidu_key',        '百度 SecretKey:'),
-            ('deepl_key',        'DeepL API Key:'),
-            ('zhipu_key',        '智谱 API Key:'),
-            ('siliconflow_key',  '硅基流动 API Key:'),
-            ('moonshot_key',     'Kimi API Key:'),
-            ('deepseek_key',     'DeepSeek API Key:'),
-            ('openai_key',       'OpenAI API Key:'),
-            ('claude_key',       'Claude API Key:'),
+            ('zhipu_key',       '智谱 API Key:',
+             'https://open.bigmodel.cn/usercenter/apikeys',
+             '智谱 AI 开放平台\nGLM-4-Flash 模型永久免费\n注册后在"API 密钥"页面创建'),
+            ('siliconflow_key', '硅基流动 API Key:',
+             'https://cloud.siliconflow.cn/account/ak',
+             '硅基流动（SiliconFlow）\n注册赠送 14 元额度，多款开源模型可用\n在"API 密钥"页面创建'),
+            ('moonshot_key',    'Kimi API Key:',
+             'https://platform.moonshot.cn/console/api-keys',
+             '月之暗面 Kimi\n新用户有免费体验额度\n在控制台"API 密钥"页面创建'),
+            ('deepseek_key',    'DeepSeek API Key:',
+             'https://platform.deepseek.com/api_keys',
+             'DeepSeek AI\n价格极低、效果优秀，国内直连\n在平台"API Keys"页面创建'),
+            ('baidu_appid',     '百度 AppID:',
+             'https://fanyi-api.baidu.com/manage/developer',
+             '百度翻译开放平台\n通用版每月 500 万字符免费\n需同时填写 AppID 和 SecretKey'),
+            ('baidu_key',       '百度 SecretKey:',
+             'https://fanyi-api.baidu.com/manage/developer',
+             '百度翻译 SecretKey，与 AppID 配套使用\n在开放平台"管理控制台"中获取'),
+            ('deepl_key',       'DeepL API Key:',
+             'https://www.deepl.com/pro-api',
+             'DeepL 翻译 API\n免费版每月 50 万字符\n注册后在账户页面 → API Keys 获取'),
+            ('openai_key',      'OpenAI API Key:',
+             'https://platform.openai.com/api-keys',
+             'OpenAI GPT 系列\n需绑定信用卡，按量计费\n在 platform.openai.com → API keys 创建'),
+            ('claude_key',      'Claude API Key:',
+             'https://console.anthropic.com/settings/keys',
+             'Anthropic Claude 系列\n在 console.anthropic.com → Settings → API Keys 创建'),
         ]
-        for name, label in key_configs:
+        for name, label, url, tooltip in key_configs:
             edit = QLineEdit()
             edit.setEchoMode(QLineEdit.Password)
             edit.setPlaceholderText('留空则此后端不可用')
+            edit.setToolTip(tooltip)
             self._key_fields[name] = edit
-            key_form.addRow(label, edit)
+
+            link = QLabel(f'<a href="{url}" style="color:#4a9eff;font-size:11px;text-decoration:none;">获取密钥 ↗</a>')
+            link.setOpenExternalLinks(True)
+            link.setToolTip(url)
+            link.setFixedWidth(68)
+            link.setAlignment(Qt.AlignVCenter | Qt.AlignRight)
+
+            row_widget = QWidget()
+            row_layout = QHBoxLayout(row_widget)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            row_layout.setSpacing(4)
+            row_layout.addWidget(edit)
+            row_layout.addWidget(link)
+
+            key_form.addRow(label, row_widget)
 
         tabs.addTab(key_tab, 'API 密钥')
         layout.addWidget(tabs)

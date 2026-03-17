@@ -69,6 +69,7 @@ class CoreController(QObject):
         self._translation_job_seq = 0
         self._box_mode = 'fixed'
         self._translate_mode = 'manual'
+        self._explain_pending = False     # Alt+E 无文本时：框选完成后走 AI 解释
         self._multi_results: dict  = {}   # box_id → result dict（多框模式）
         self._box_img_hashes: dict = {}   # box_id → float（自动翻译变化检测）
 
@@ -99,6 +100,7 @@ class CoreController(QObject):
         self.tray = SystemTray()
 
         self.overlay.selection_made.connect(self._on_selection_made)
+        self.overlay.cancelled.connect(self._on_selection_cancelled)
         self.box_manager.translate_box.connect(self._on_translate_box)
         self.box_manager.box_removed.connect(self._on_box_removed)
         self.result_bar.start_selection_requested.connect(self._start_selection)
@@ -166,8 +168,8 @@ class CoreController(QObject):
             def on_select():   self._sig_start_selection.emit()
             def on_explain():  self._sig_trigger_explain.emit()
             def on_toggle():   self._sig_toggle_boxes.emit()
-            def on_mode1():    self._sig_mode_temp.emit()
-            def on_mode2():    self._sig_mode_fixed.emit()
+            def on_mode1():    self._sig_mode_fixed.emit()
+            def on_mode2():    self._sig_mode_temp.emit()
             def on_mode3():    self._sig_mode_multi.emit()
             def on_mode4():    self._sig_mode_ai.emit()
 
@@ -178,8 +180,8 @@ class CoreController(QObject):
             }
             # 模式切换热键单独加入，若注册失败不影响核心热键
             try:
-                core_map[_fmt_hotkey(self.settings.get('hotkey_mode_temp',  'alt+1'))] = on_mode1
-                core_map[_fmt_hotkey(self.settings.get('hotkey_mode_fixed', 'alt+2'))] = on_mode2
+                core_map[_fmt_hotkey(self.settings.get('hotkey_mode_fixed', 'alt+1'))] = on_mode1
+                core_map[_fmt_hotkey(self.settings.get('hotkey_mode_temp',  'alt+2'))] = on_mode2
                 core_map[_fmt_hotkey(self.settings.get('hotkey_mode_multi', 'alt+3'))] = on_mode3
                 core_map[_fmt_hotkey(self.settings.get('hotkey_mode_ai',    'alt+4'))] = on_mode4
             except Exception as e:
@@ -215,8 +217,8 @@ class CoreController(QObject):
     def _refresh_mode_tooltips(self):
         if hasattr(self, 'result_bar'):
             self.result_bar.update_mode_tooltips(
-                self.settings.get('hotkey_mode_temp',  'alt+1'),
-                self.settings.get('hotkey_mode_fixed', 'alt+2'),
+                self.settings.get('hotkey_mode_temp',  'alt+2'),
+                self.settings.get('hotkey_mode_fixed', 'alt+1'),
                 self.settings.get('hotkey_mode_multi', 'alt+3'),
                 self.settings.get('hotkey_mode_ai',    'alt+4'),
             )
@@ -255,6 +257,9 @@ class CoreController(QObject):
 
     def _start_selection(self):
         self.overlay.show_overlay()
+
+    def _on_selection_cancelled(self):
+        self._explain_pending = False
 
     def _handle_result_bar_close(self):
         behavior = self.settings.get('close_button_behavior', 'ask')
@@ -334,7 +339,9 @@ class CoreController(QObject):
         """框选完成：先等 overlay 从合成器消失，再截图；截图后才创建翻译框"""
         if self._box_mode != 'multi':
             self.box_manager.clear_all()
-        self.result_bar.show_loading('识别中...')
+        # 固定框模式：保留结果条上次内容，避免"清空闪烁"，新结果出来后再更新
+        if self._box_mode not in ('fixed',):
+            self.result_bar.show_loading('识别中...')
         # 给 DWM 合成器 150ms 完全清除 overlay，之后再开始截图
         # 此时翻译框还未创建，截图区域无任何遮挡
         QTimer.singleShot(150, lambda: self._run_ocr_for_rect(rect))
@@ -367,7 +374,8 @@ class CoreController(QObject):
             box.set_mode('fixed')
             if self._translate_mode == 'auto':
                 box._pending_auto = True
-        if self._box_mode == 'ai':
+        if self._explain_pending or self._box_mode == 'ai':
+            self._explain_pending = False
             box.set_mode('temp')   # AI框选框 临时消失
             text = self._normalize_ocr_payload(payload)['text']
             if text.strip():
@@ -419,6 +427,7 @@ class CoreController(QObject):
             box.start_dismiss_timer()
             return
         box.set_ocr_text(text)
+        self.result_bar.show_ocr_text(text)
         self.result_bar.show_loading('翻译中...')
         self._run_translate(text, box)
 
@@ -499,10 +508,10 @@ class CoreController(QObject):
         translated = getattr(box, '_last_translation', '')
         if not translated or mode == 'off':
             return
-        if mode == 'over':
+        if mode in ('over_para', 'over'):
             paragraphs = getattr(box, '_last_ocr_paragraphs', [])
             translations = getattr(box, '_last_paragraph_translations', [])
-            if paragraphs and not translations:
+            if paragraphs and not translations and mode == 'over_para':
                 self._run_paragraph_translate(box)
         box.show_subtitle(translated)
 
@@ -512,7 +521,7 @@ class CoreController(QObject):
         setattr(box, '_paragraph_translation_pending', False)
         setattr(box, '_pending_paragraph_translations', [])
         setattr(box, '_last_paragraph_translations', list(translations or []))
-        if getattr(box, '_subtitle_mode', 'off') == 'over' and getattr(box, '_last_translation', ''):
+        if getattr(box, '_subtitle_mode', 'off') == 'over_para' and getattr(box, '_last_translation', ''):
             box.show_subtitle(box._last_translation)
 
     def _on_translate_error(self, msg: str, worker=None):
@@ -624,14 +633,16 @@ class CoreController(QObject):
                 box.refresh_overlay_style()
 
     def _trigger_explain(self):
-        if self.result_bar._current_result:
-            text = ''
-            if hasattr(self.result_bar, 'current_source_text'):
-                text = self.result_bar.current_source_text()
-            if not text:
-                text = self.result_bar._current_result.get('original', '')
-            if text:
-                self._on_explain_requested(text)
+        text = ''
+        if hasattr(self.result_bar, 'current_source_text'):
+            text = self.result_bar.current_source_text()
+        if not text and self.result_bar._current_result:
+            text = self.result_bar._current_result.get('original', '')
+        if text:
+            self._on_explain_requested(text)
+        else:
+            self._explain_pending = True
+            self._start_selection()
 
     def _on_retranslate_requested(self, text: str):
         text = str(text or '').strip()
@@ -682,7 +693,7 @@ class CoreController(QObject):
         if box is not None:
             setattr(box, '_last_translation', translated)
             overlay_mode = getattr(box, '_subtitle_mode', 'off')
-            if overlay_mode == 'over' and getattr(box, '_last_ocr_paragraphs', []) and not getattr(box, '_last_paragraph_translations', []):
+            if overlay_mode == 'over_para' and getattr(box, '_last_ocr_paragraphs', []) and not getattr(box, '_last_paragraph_translations', []):
                 self._run_paragraph_translate(box)
             if translated and (getattr(box, '_subtitle_active', False) or overlay_mode != 'off'):
                 box.show_subtitle(translated)
