@@ -105,7 +105,7 @@ def test_overlay_mode_over_uses_paragraph_bars_when_data_exists():
     box, _ = _make_box()
     box.show()
     _set_paragraph_overlay_data(box)
-    box.set_overlay_mode('over')
+    box.set_overlay_mode('over_para')
     box.show_subtitle('full translation')
 
     assert len(box._subtitle_paragraph_wins) == 2
@@ -119,7 +119,7 @@ def test_paragraph_overlays_stay_below_toolbar_safe_area():
     box, _ = _make_box()
     box.show()
     _set_paragraph_overlay_data(box)
-    box.set_overlay_mode('over')
+    box.set_overlay_mode('over_para')
     box.show_subtitle('full translation')
     _app.processEvents()
 
@@ -165,7 +165,7 @@ def test_paragraph_overlay_windows_are_mouse_transparent():
     box, _ = _make_box()
     box.show()
     _set_paragraph_overlay_data(box)
-    box.set_overlay_mode('over')
+    box.set_overlay_mode('over_para')
     box.show_subtitle('full translation')
 
     assert all(win.testAttribute(Qt.WA_TransparentForMouseEvents) for win in box._subtitle_paragraph_wins)
@@ -211,10 +211,12 @@ def test_pin_button_locks_current_box_position():
     press_event = MagicMock()
     press_event.button.return_value = Qt.LeftButton
     press_event.globalPos.return_value = QPoint(box.x() + 10, box.y() + 10)
+    press_event.pos.return_value = QPoint(10, 10)
 
     move_event = MagicMock()
     move_event.buttons.return_value = Qt.LeftButton
     move_event.globalPos.return_value = QPoint(box.x() + 80, box.y() + 60)
+    move_event.pos.return_value = QPoint(20, 20)
 
     box._on_toggle_pin()
     box.mousePressEvent(press_event)
@@ -222,6 +224,16 @@ def test_pin_button_locks_current_box_position():
 
     assert getattr(box, '_position_locked', False) is True
     assert box.pos() == initial_pos
+
+
+def test_pin_button_keeps_consistent_label_when_locked():
+    box, _ = _make_box()
+
+    assert box._btn_pin.text() == "钉"
+
+    box._on_toggle_pin()
+
+    assert box._btn_pin.text() == "钉"
 
 
 def test_locked_temp_box_does_not_emit_close_on_dismiss_timeout():
@@ -253,7 +265,7 @@ def test_paragraph_subtitles_follow_box_on_move():
     box, _ = _make_box()
     box.show()
     _set_paragraph_overlay_data(box)
-    box.set_overlay_mode('over')
+    box.set_overlay_mode('over_para')
     box.show_subtitle('full translation')
 
     box.move(300, 200)
@@ -313,6 +325,10 @@ def test_toggle_subtitle_cycles_modes():
     assert box._subtitle_active is True
 
     box._on_toggle_subtitle()
+    assert box._subtitle_mode == 'over_para'
+    assert box._subtitle_active is True
+
+    box._on_toggle_subtitle()
     assert box._subtitle_mode == 'below'
     assert box._subtitle_active is True
 
@@ -348,7 +364,7 @@ def test_close_event_destroys_paragraph_subtitle_wins():
     box, _ = _make_box()
     box.show()
     _set_paragraph_overlay_data(box)
-    box.set_overlay_mode('over')
+    box.set_overlay_mode('over_para')
     box.show_subtitle('full translation')
 
     assert len(box._subtitle_paragraph_wins) == 2

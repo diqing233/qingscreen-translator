@@ -246,7 +246,7 @@ def test_ocr_done_preserves_layout_payload():
     ctrl._run_translate.assert_called_once_with('hello world', box)
 
 
-def test_translate_done_requests_paragraph_translation_for_over_mode():
+def test_translate_done_requests_paragraph_translation_for_over_para_mode():
     from core.controller import CoreController
 
     ctrl = CoreController.__new__(CoreController)
@@ -259,7 +259,7 @@ def test_translate_done_requests_paragraph_translation_for_over_mode():
     box = MagicMock()
     box.box_id = 1
     box.mode = 'fixed'
-    box._subtitle_mode = 'over'
+    box._subtitle_mode = 'over_para'
     box._subtitle_active = False
     box._pending_auto = False
     box._last_ocr_paragraphs = [{'text': 'hello', 'rect': {'x': 0, 'y': 0, 'width': 40, 'height': 12}}]
@@ -279,7 +279,7 @@ def test_translate_done_requests_paragraph_translation_for_over_mode():
     box.show_subtitle.assert_called_once_with('ni hao')
 
 
-def test_overlay_mode_change_to_over_requests_paragraph_translation_when_missing():
+def test_overlay_mode_change_to_over_para_requests_paragraph_translation_when_missing():
     from core.controller import CoreController
 
     ctrl = CoreController.__new__(CoreController)
@@ -290,13 +290,13 @@ def test_overlay_mode_change_to_over_requests_paragraph_translation_when_missing
     box._last_ocr_paragraphs = [{'text': 'hello', 'rect': {'x': 0, 'y': 0, 'width': 40, 'height': 12}}]
     box._last_paragraph_translations = []
 
-    CoreController._on_box_overlay_mode_changed(ctrl, box, 'over')
+    CoreController._on_box_overlay_mode_changed(ctrl, box, 'over_para')
 
     ctrl._run_paragraph_translate.assert_called_once_with(box)
     box.show_subtitle.assert_called_once_with('ni hao')
 
 
-def test_overlay_mode_change_to_over_uses_cached_paragraph_translation():
+def test_overlay_mode_change_to_over_para_uses_cached_paragraph_translation():
     from core.controller import CoreController
 
     ctrl = CoreController.__new__(CoreController)
@@ -307,19 +307,19 @@ def test_overlay_mode_change_to_over_uses_cached_paragraph_translation():
     box._last_ocr_paragraphs = [{'text': 'hello', 'rect': {'x': 0, 'y': 0, 'width': 40, 'height': 12}}]
     box._last_paragraph_translations = ['浣犲ソ']
 
-    CoreController._on_box_overlay_mode_changed(ctrl, box, 'over')
+    CoreController._on_box_overlay_mode_changed(ctrl, box, 'over_para')
 
     ctrl._run_paragraph_translate.assert_not_called()
     box.show_subtitle.assert_called_once_with('ni hao')
 
 
-def test_paragraph_translate_done_updates_box_and_refreshes_over_subtitle():
+def test_paragraph_translate_done_updates_box_and_refreshes_over_para_subtitle():
     from core.controller import CoreController
 
     ctrl = CoreController.__new__(CoreController)
 
     box = MagicMock()
-    box._subtitle_mode = 'over'
+    box._subtitle_mode = 'over_para'
     box._last_translation = 'ni hao'
 
     CoreController._on_paragraph_translate_done(ctrl, ['浣犲ソ'], box)
@@ -392,7 +392,7 @@ def test_single_paragraph_translation_done_refreshes_when_all_segments_arrive():
     ctrl = CoreController.__new__(CoreController)
 
     box = MagicMock()
-    box._subtitle_mode = 'over'
+    box._subtitle_mode = 'over_para'
     box._last_translation = 'full translation'
     box._pending_paragraph_translations = [''] * 2
 

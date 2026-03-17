@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 # ── 数据常量 ─────────────────────────────────────────────────────
 
-DEFAULT_W, DEFAULT_H = 600, 140
+DEFAULT_W, DEFAULT_H = 640, 140
 
 BOX_MODE_ORDER = ['fixed', 'temp', 'multi']
 BOX_MODE_META = {
@@ -73,6 +73,11 @@ QMenu::item:selected { background: rgba(80,130,255,180); color: white; }
 QMenu::item:checked { font-weight: bold; color: rgba(120,200,255,255); }
 '''
 
+_TOOLBAR_BUTTON_H = 22
+_TOOLBAR_ICON_W = 22
+_SMALL_TOOLBAR_BUTTON_W = 26
+_BUTTON_RADIUS = 5
+
 
 # ── 任务栏最小化代理窗口 ─────────────────────────────────────────
 
@@ -105,7 +110,7 @@ class TranslateToggle(QWidget):
     """两段式滑动切换：点击 ↔ 自动"""
     toggled = pyqtSignal(bool)  # True = auto
 
-    W, H = 86, 22
+    W, H = 84, 22
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -129,25 +134,29 @@ class TranslateToggle(QWidget):
         mid = w // 2
 
         # Track background
-        p.setPen(Qt.NoPen)
-        p.setBrush(QColor(30, 30, 45, 200))
-        p.drawRoundedRect(0, 0, w, h, r, r)
+        p.setPen(QPen(QColor(255, 255, 255, 28), 1))
+        p.setBrush(QColor(29, 31, 41, 228))
+        p.drawRoundedRect(0, 0, w - 1, h - 1, r, r)
 
         # Active pill
         pill_x = mid if self._auto else 0
-        pill_color = QColor(55, 185, 95, 215) if self._auto else QColor(60, 120, 240, 215)
+        pill_color = QColor(78, 170, 103, 224) if self._auto else QColor(82, 132, 236, 224)
         p.setBrush(pill_color)
-        p.drawRoundedRect(pill_x, 0, mid, h, r, r)
+        p.setPen(Qt.NoPen)
+        p.drawRoundedRect(pill_x + 1, 1, mid - 2, h - 2, r - 1, r - 1)
+
+        p.setPen(QPen(QColor(255, 255, 255, 18), 1))
+        p.drawLine(mid, 4, mid, h - 5)
 
         # Text labels
         f = p.font()
         f.setPixelSize(11)
         p.setFont(f)
 
-        p.setPen(QColor(255, 255, 255, 230 if not self._auto else 90))
+        p.setPen(QColor(255, 255, 255, 235 if not self._auto else 108))
         p.drawText(0, 0, mid, h, Qt.AlignCenter, '点击')
 
-        p.setPen(QColor(255, 255, 255, 230 if self._auto else 90))
+        p.setPen(QColor(255, 255, 255, 235 if self._auto else 108))
         p.drawText(mid, 0, mid, h, Qt.AlignCenter, '自动')
 
     def mousePressEvent(self, event):
@@ -170,19 +179,21 @@ class _SplitButton(QWidget):
         super().__init__(parent)
         self._left_label = left_label
         self._arrow = '▼'
+        self._active = False
         self._hover_left = False
         self._hover_right = False
         self.setMouseTracking(True)
         self.setCursor(Qt.PointingHandCursor)
-        self.setFixedHeight(22)
+        self.setFixedHeight(_TOOLBAR_BUTTON_H)
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
     def sizeHint(self):
         left_w = self.fontMetrics().horizontalAdvance(self._left_label) + 16
-        return QSize(left_w + self._RIGHT_W + 1, 22)
+        return QSize(left_w + self._RIGHT_W + 1, _TOOLBAR_BUTTON_H)
 
     def set_arrow(self, up: bool):
         self._arrow = '▲' if up else '▼'
+        self._active = bool(up)
         self.update()
 
     def _divider_x(self) -> int:
@@ -199,41 +210,41 @@ class _SplitButton(QWidget):
         def a(v):
             return int(v * fade)
 
-        # 底色
-        painter.setPen(QPen(QColor(255, 255, 255, a(18)), 1))
-        painter.setBrush(QColor(55, 55, 70, a(180)))
-        painter.drawRoundedRect(0, 0, w - 1, h - 1, 4, 4)
+        border = QColor(142, 165, 220, a(72)) if self._active else QColor(255, 255, 255, a(20))
+        background = QColor(74, 78, 98, a(194)) if self._active else QColor(58, 60, 74, a(192))
+        text_color = QColor(236, 239, 247, 236 if self._active else a(214))
+        hover_fill = QColor(255, 255, 255, 18 if self._active else 14)
 
-        # 悬停高亮（裁剪到对应半边）
+        painter.setPen(QPen(border, 1))
+        painter.setBrush(background)
+        painter.drawRoundedRect(0, 0, w - 1, h - 1, _BUTTON_RADIUS, _BUTTON_RADIUS)
+
         if enabled and self._hover_left:
             painter.save()
             painter.setClipRect(QRect(0, 0, div_x, h))
             painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(255, 255, 255, 22))
-            painter.drawRoundedRect(0, 0, w - 1, h - 1, 4, 4)
+            painter.setBrush(hover_fill)
+            painter.drawRoundedRect(0, 0, w - 1, h - 1, _BUTTON_RADIUS, _BUTTON_RADIUS)
             painter.restore()
         elif enabled and self._hover_right:
             painter.save()
             painter.setClipRect(QRect(div_x, 0, w - div_x, h))
             painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(255, 255, 255, 22))
-            painter.drawRoundedRect(0, 0, w - 1, h - 1, 4, 4)
+            painter.setBrush(hover_fill)
+            painter.drawRoundedRect(0, 0, w - 1, h - 1, _BUTTON_RADIUS, _BUTTON_RADIUS)
             painter.restore()
 
-        # 分割线
-        painter.setPen(QPen(QColor(255, 255, 255, a(50)), 1))
+        painter.setPen(QPen(QColor(255, 255, 255, a(36)), 1))
         painter.drawLine(div_x, 3, div_x, h - 4)
 
-        # 左侧文字
-        text_color = (QColor(255, 255, 255, 230) if (enabled and self._hover_left)
-                      else QColor(200, 200, 210, a(220)))
-        painter.setPen(text_color)
+        painter.setPen(
+            QColor(255, 255, 255, 238) if (enabled and self._hover_left) else text_color
+        )
         painter.drawText(QRect(0, 0, div_x, h), Qt.AlignCenter, self._left_label)
 
-        # 右侧箭头
-        arrow_color = (QColor(255, 255, 255, 230) if (enabled and self._hover_right)
-                       else QColor(200, 200, 210, a(220)))
-        painter.setPen(arrow_color)
+        painter.setPen(
+            QColor(255, 255, 255, 238) if (enabled and self._hover_right) else text_color
+        )
         painter.drawText(QRect(div_x, 0, w - div_x, h), Qt.AlignCenter, self._arrow)
 
     def mousePressEvent(self, event):
@@ -690,65 +701,129 @@ class ResultBar(QWidget):
         btn = QPushButton(label)
         btn.setToolTip(tip)
         btn.setCheckable(True)
-        btn.setFixedHeight(22)
+        btn.setFixedHeight(_TOOLBAR_BUTTON_H)
         btn.setMinimumWidth(36)
         btn.setStyleSheet(self._mode_btn_style(False))
         btn.clicked.connect(lambda _, k=key: self._on_mode_btn_click(k))
         return btn
 
+    def _solid_button_style(
+        self,
+        *,
+        background: str,
+        color: str,
+        border: str,
+        hover_background: str,
+        hover_color: str = 'white',
+        pressed_background: str = None,
+        disabled_background: str = None,
+        disabled_color: str = 'rgba(170,174,190,130)',
+        radius: int = _BUTTON_RADIUS,
+        padding: str = '0 8px',
+        font_size: int = 11,
+        font_weight: int = 500,
+    ) -> str:
+        pressed_background = pressed_background or hover_background
+        disabled_background = disabled_background or background
+        return f'''
+            QPushButton {{
+                background: {background};
+                color: {color};
+                border: 1px solid {border};
+                border-radius: {radius}px;
+                padding: {padding};
+                font-size: {font_size}px;
+                font-weight: {font_weight};
+            }}
+            QPushButton:hover {{
+                background: {hover_background};
+                color: {hover_color};
+            }}
+            QPushButton:pressed {{
+                background: {pressed_background};
+                color: {hover_color};
+            }}
+            QPushButton:disabled {{
+                background: {disabled_background};
+                color: {disabled_color};
+                border: 1px solid rgba(255,255,255,10);
+            }}
+        '''
+
+    def _action_btn_style(self, active: bool = False) -> str:
+        if active:
+            return self._solid_button_style(
+                background='rgba(72,78,98,198)',
+                color='rgba(238,241,248,235)',
+                border='rgba(142,165,220,76)',
+                hover_background='rgba(84,92,114,214)',
+                padding='0 9px',
+            )
+        return self._solid_button_style(
+            background='rgba(58,60,74,190)',
+            color='rgba(212,216,228,226)',
+            border='rgba(255,255,255,18)',
+            hover_background='rgba(70,74,90,210)',
+            padding='0 9px',
+        )
+
     def _small_toolbar_btn(self, label: str, tip: str, callback) -> QPushButton:
         btn = QPushButton(label)
         btn.setToolTip(tip)
-        btn.setFixedSize(26, 22)
-        btn.setStyleSheet('''
-            QPushButton {
-                background: rgba(50,50,65,180); color: rgba(200,200,210,220);
-                border: 1px solid rgba(255,255,255,15);
-                border-radius: 4px; font-size: 10px; font-weight: bold;
-            }
-            QPushButton:hover { background: rgba(70,70,95,220); color: white; }
-        ''')
+        btn.setFixedSize(_SMALL_TOOLBAR_BUTTON_W, _TOOLBAR_BUTTON_H)
+        btn.setStyleSheet(
+            self._solid_button_style(
+                background='rgba(54,56,70,188)',
+                color='rgba(214,218,230,226)',
+                border='rgba(255,255,255,18)',
+                hover_background='rgba(68,72,88,210)',
+                padding='0 6px',
+                font_size=10,
+                font_weight=600,
+            )
+        )
         btn.clicked.connect(callback)
         return btn
 
     def _mode_btn_style(self, active: bool) -> str:
         if active:
-            return '''
-                QPushButton {
-                    background: rgba(80,140,255,200); color: white;
-                    border: 1px solid rgba(120,170,255,180);
-                    border-radius: 4px; padding: 2px 6px; font-size: 11px; font-weight: bold;
-                }
-                QPushButton:hover { background: rgba(100,160,255,220); }
-            '''
-        return '''
-            QPushButton {
-                background: rgba(50,50,65,180); color: rgba(180,180,200,200);
-                border: 1px solid rgba(255,255,255,15);
-                border-radius: 4px; padding: 2px 6px; font-size: 11px;
-            }
-            QPushButton:hover { background: rgba(70,70,90,220); color: white; }
-        '''
+            return self._solid_button_style(
+                background='rgba(80,140,255,204)',
+                color='white',
+                border='rgba(128,176,255,184)',
+                hover_background='rgba(98,156,255,220)',
+                padding='0 8px',
+                font_weight=600,
+            )
+        return self._solid_button_style(
+            background='rgba(54,56,70,186)',
+            color='rgba(188,192,208,212)',
+            border='rgba(255,255,255,16)',
+            hover_background='rgba(68,72,88,206)',
+            padding='0 8px',
+            font_weight=500,
+        )
 
     def _lang_btn_style(self) -> str:
-        return '''
-            QPushButton {
-                background: rgba(50,50,65,180); color: rgba(160,160,185,215);
-                border: 1px solid rgba(255,255,255,15);
-                border-radius: 4px; padding: 2px 8px; font-size: 11px;
-            }
-            QPushButton:hover { background: rgba(70,70,95,220); color: rgba(210,220,255,235); }
-        '''
+        return self._solid_button_style(
+            background='rgba(52,54,68,184)',
+            color='rgba(176,180,198,220)',
+            border='rgba(255,255,255,16)',
+            hover_background='rgba(66,70,86,204)',
+            hover_color='rgba(220,228,245,236)',
+            padding='0 10px',
+        )
 
     def _icon_btn(self, icon: str, tip: str, cb) -> QPushButton:
         b = QPushButton(icon)
         b.setToolTip(tip)
-        b.setFixedSize(22, 22)
+        b.setFixedSize(_TOOLBAR_ICON_W, _TOOLBAR_BUTTON_H)
         b.setStyleSheet('''
-            QPushButton { background: transparent; color: rgba(160,160,180,200);
+            QPushButton { background: transparent; color: rgba(166,170,186,204);
                           border: none; font-size: 12px; }
-            QPushButton:hover { color: white; background: rgba(255,255,255,15);
-                                border-radius: 3px; }
+            QPushButton:hover { color: white; background: rgba(255,255,255,12);
+                                border-radius: 4px; }
+            QPushButton:pressed { background: rgba(255,255,255,18); }
         ''')
         b.clicked.connect(cb)
         return b
@@ -756,12 +831,8 @@ class ResultBar(QWidget):
     def _action_btn(self, label: str, tip: str, cb) -> QPushButton:
         b = QPushButton(label)
         b.setToolTip(tip)
-        b.setStyleSheet('''
-            QPushButton { background: rgba(55,55,70,180); color: rgba(200,200,210,220);
-                          border: 1px solid rgba(255,255,255,18); border-radius: 4px;
-                          padding: 2px 8px; font-size: 11px; }
-            QPushButton:hover { background: rgba(75,75,100,210); color: white; }
-        ''')
+        b.setFixedHeight(_TOOLBAR_BUTTON_H)
+        b.setStyleSheet(self._action_btn_style(False))
         b.clicked.connect(cb)
         return b
 
@@ -772,22 +843,22 @@ class ResultBar(QWidget):
 
     def _stop_clear_btn_style(self, busy: bool) -> str:
         if busy:
-            return '''
-                QPushButton {
-                    background: rgba(180,80,50,190); color: white;
-                    border: 1px solid rgba(255,170,120,120);
-                    border-radius: 4px; font-size: 11px; font-weight: bold;
-                }
-                QPushButton:hover { background: rgba(210,95,60,220); }
-            '''
-        return '''
-            QPushButton {
-                background: rgba(50,50,65,180); color: rgba(200,200,210,220);
-                border: 1px solid rgba(255,255,255,15);
-                border-radius: 4px; font-size: 11px; font-weight: bold;
-            }
-            QPushButton:hover { background: rgba(70,70,95,220); color: white; }
-        '''
+            return self._solid_button_style(
+                background='rgba(182,84,54,198)',
+                color='white',
+                border='rgba(246,169,138,130)',
+                hover_background='rgba(210,96,62,220)',
+                padding='0 8px',
+                font_weight=700,
+            )
+        return self._solid_button_style(
+            background='rgba(54,56,70,188)',
+            color='rgba(214,218,230,226)',
+            border='rgba(255,255,255,18)',
+            hover_background='rgba(68,72,88,210)',
+            padding='0 8px',
+            font_weight=600,
+        )
 
     def _refresh_toolbar_layout(self):
         self._update_lang_button_widths()
@@ -970,38 +1041,31 @@ class ResultBar(QWidget):
         return preferred_height
 
     def _apply_splitter_sizes(self, *, translation_height=None, source_height=None, explain_height=None):
-        # 翻译面板：始终贴合内容高度，不留空白
         if translation_height is None:
-            translation_height = self._preferred_translation_panel_height()
+            translation_height = self._current_panel_height(
+                self._translation_panel,
+                self._preferred_translation_panel_height(),
+            )
 
-        # 原文面板：始终贴合内容高度（如果可见）
         if source_height is None:
             source_height = (
-                self._preferred_source_panel_height()
+                self._current_panel_height(self._source_panel, self._preferred_source_panel_height())
                 if self._panel_in_content_splitter(self._source_panel)
                 else 0
             )
-
         sizes = [max(72, int(translation_height))]
         if self._panel_in_content_splitter(self._source_panel):
             sizes.append(max(96, int(source_height)))
 
-        # AI 科普面板：填充窗口剩余所有空间
         if self._panel_in_content_splitter(self._explain_panel):
             if explain_height is None:
-                splitter_h = self._content_splitter.height()
-                if splitter_h > 0:
-                    handles = (self._content_splitter.count() - 1) * self._content_splitter.handleWidth()
-                    explain_height = max(40, splitter_h - sum(sizes) - handles)
-                else:
-                    explain_height = self._preferred_explain_panel_height()
-            sizes.append(max(40, int(explain_height)))
+                explain_height = self._current_panel_height(
+                    self._explain_panel,
+                    self._preferred_explain_panel_height(),
+                )
+            sizes.append(max(96, int(explain_height)))
 
         self._content_splitter.setSizes(sizes)
-        # 翻译/原文面板不随窗口拉伸；AI 科普面板（最后一项）填充剩余空间
-        n = self._content_splitter.count()
-        for i in range(n):
-            self._content_splitter.setStretchFactor(i, 1 if i == n - 1 else 0)
 
     def _update_translation_height(self):
         self._preferred_translation_panel_height()
@@ -1040,14 +1104,30 @@ class ResultBar(QWidget):
             if panel is self._source_panel
             else self._preferred_explain_panel_height()
         )
+        translation_height = self._current_panel_height(
+            self._translation_panel,
+            self._preferred_translation_panel_height(),
+        )
+        source_height = (
+            self._current_panel_height(self._source_panel, self._preferred_source_panel_height())
+            if self._panel_in_content_splitter(self._source_panel)
+            else 0
+        )
+        explain_height = (
+            self._current_panel_height(self._explain_panel, self._preferred_explain_panel_height())
+            if self._panel_in_content_splitter(self._explain_panel)
+            else 0
+        )
 
         if visible:
             already_visible = self._panel_in_content_splitter(panel)
             if panel is self._source_panel:
                 self._insert_content_panel(self._source_panel, 1)
+                source_height = max(source_height, preferred_height)
             else:
                 explain_index = 2 if self._panel_in_content_splitter(self._source_panel) else 1
                 self._insert_content_panel(self._explain_panel, explain_index)
+                explain_height = max(explain_height, preferred_height)
             if not already_visible:
                 self._resize_preserving_top(self.height() + preferred_height + self._content_splitter.handleWidth())
         else:
@@ -1055,19 +1135,23 @@ class ResultBar(QWidget):
                 return
             current_height = self._current_panel_height(panel, preferred_height)
             self._remove_content_panel(panel)
+            if panel is self._source_panel:
+                source_height = 0
+            else:
+                explain_height = 0
             self._resize_preserving_top(
                 max(self.minimumHeight(), self.height() - current_height - self._content_splitter.handleWidth())
             )
 
-        # 翻译/原文由 _apply_splitter_sizes 自动贴合内容高度；
-        # 新展开 explain 时传入初始高度，其余情况自动计算
-        if visible and panel is self._explain_panel:
-            self._apply_splitter_sizes(explain_height=preferred_height)
-        else:
-            self._apply_splitter_sizes()
+        self._apply_splitter_sizes(
+            translation_height=translation_height,
+            source_height=source_height,
+            explain_height=explain_height,
+        )
 
     def _update_source_button(self):
         self._btn_source.setText('原文 ▲' if self._source_expanded else '原文 ▼')
+        self._btn_source.setStyleSheet(self._action_btn_style(self._source_expanded))
 
     def _update_ai_button(self):
         self._btn_ai.set_arrow(self._explain_expanded)
@@ -1347,16 +1431,7 @@ class ResultBar(QWidget):
 
     def _toggle_para_numbers(self):
         self._show_para_numbers = not self._show_para_numbers
-        active = self._show_para_numbers
-        self._btn_para_num.setStyleSheet(f'''
-            QPushButton {{
-                background: {"rgba(80,140,255,200)" if active else "rgba(55,55,70,180)"};
-                color: white;
-                border: 1px solid {"rgba(120,170,255,180)" if active else "rgba(255,255,255,18)"};
-                border-radius: 4px; padding: 2px 8px; font-size: 11px;
-            }}
-            QPushButton:hover {{ background: {"rgba(100,160,255,220)" if active else "rgba(75,75,100,210)"}; color: white; }}
-        ''')
+        self._btn_para_num.setStyleSheet(self._action_btn_style(self._show_para_numbers))
         if self._current_result:
             self.show_result(self._current_result)
 

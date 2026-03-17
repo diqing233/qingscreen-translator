@@ -9,6 +9,8 @@ _RESIZE_CURSORS = {
     'n':  Qt.SizeVerCursor,   's':  Qt.SizeVerCursor,
     'w':  Qt.SizeHorCursor,   'e':  Qt.SizeHorCursor,
 }
+_BUTTON_HEIGHT = 22
+_BUTTON_RADIUS = 5
 
 
 class _SubtitleWindow(QWidget):
@@ -166,7 +168,7 @@ class TranslationBox(QWidget):
         btn_layout.setContentsMargins(0, 0, 0, 0)
         btn_layout.setSpacing(2)
 
-        self._btn_translate = self._make_btn("译", "立即翻译", lambda: self.translate_requested.emit(self))
+        self._btn_translate = self._make_btn("译", "立即翻译", lambda: self.translate_requested.emit(self), tone="primary")
         self._btn_pin = self._make_btn("钉", "固定/取消固定", self._on_toggle_pin)
         self._btn_subtitle = self._make_btn("⊞", "覆盖翻译", self._on_toggle_subtitle)
         self._btn_overlay_font_down = self._make_btn(
@@ -181,7 +183,13 @@ class TranslationBox(QWidget):
             lambda: self._adjust_overlay_font_delta(1),
             width=24,
         )
-        self._btn_overlay_close = self._make_btn("✕", "关闭覆盖翻译", lambda: self.set_overlay_mode(self.OVERLAY_OFF), width=24)
+        self._btn_overlay_close = self._make_btn(
+            "✕",
+            "关闭覆盖翻译",
+            lambda: self.set_overlay_mode(self.OVERLAY_OFF),
+            width=24,
+            tone="danger",
+        )
 
         for btn in [
             self._btn_translate,
@@ -209,7 +217,7 @@ class TranslationBox(QWidget):
         corner_layout.setSpacing(2)
 
         self._btn_hide = self._make_btn("隐", "隐藏", self.hide)
-        self._btn_close = self._make_btn("✕", "关闭", lambda: self.close_requested.emit(self))
+        self._btn_close = self._make_btn("✕", "关闭", lambda: self.close_requested.emit(self), tone="danger")
 
         corner_layout.addWidget(self._btn_hide)
         corner_layout.addWidget(self._btn_close)
@@ -222,19 +230,88 @@ class TranslationBox(QWidget):
         layout.addWidget(self._ocr_label)
         layout.addStretch()
 
-    def _make_btn(self, label, tooltip, callback, width=22):
+    def _button_style(
+        self,
+        *,
+        background,
+        color,
+        border,
+        hover_background,
+        hover_color="white",
+        pressed_background=None,
+        radius=_BUTTON_RADIUS,
+        font_size=11,
+        font_weight=500,
+    ):
+        pressed_background = pressed_background or hover_background
+        return f"""
+            QPushButton {{
+                background: {background};
+                color: {color};
+                border: 1px solid {border};
+                border-radius: {radius}px;
+                font-size: {font_size}px;
+                font-weight: {font_weight};
+            }}
+            QPushButton:hover {{
+                background: {hover_background};
+                color: {hover_color};
+            }}
+            QPushButton:pressed {{
+                background: {pressed_background};
+                color: {hover_color};
+            }}
+        """
+
+    def _apply_button_style(self, btn, *, active=False, tone=None):
+        tone = tone or btn.property("tone") or "neutral"
+        if tone == "primary":
+            btn.setStyleSheet(
+                self._button_style(
+                    background="rgba(82,132,236,216)",
+                    color="white",
+                    border="rgba(134,176,255,180)",
+                    hover_background="rgba(98,150,248,230)",
+                    font_weight=600,
+                )
+            )
+            return
+        if tone == "danger":
+            btn.setStyleSheet(
+                self._button_style(
+                    background="rgba(168,82,56,198)",
+                    color="white",
+                    border="rgba(236,164,134,120)",
+                    hover_background="rgba(196,94,64,218)",
+                    font_weight=600,
+                )
+            )
+            return
+        if active:
+            btn.setStyleSheet(
+                self._button_style(
+                    background="rgba(74,78,98,198)",
+                    color="rgba(240,242,248,236)",
+                    border="rgba(142,165,220,72)",
+                    hover_background="rgba(86,92,114,214)",
+                )
+            )
+            return
+        btn.setStyleSheet(
+            self._button_style(
+                background="rgba(54,56,70,190)",
+                color="rgba(216,220,232,226)",
+                border="rgba(255,255,255,18)",
+                hover_background="rgba(68,72,88,210)",
+            )
+        )
+
+    def _make_btn(self, label, tooltip, callback, width=22, tone="neutral"):
         btn = QPushButton(label)
         btn.setToolTip(tooltip)
-        btn.setFixedSize(width, 22)
-        btn.setStyleSheet(
-            """
-            QPushButton {
-                background: rgba(30,30,40,180); color: white;
-                border: none; border-radius: 3px; font-size: 11px;
-            }
-            QPushButton:hover { background: rgba(70,70,100,220); }
-            """
-        )
+        btn.setFixedSize(width, _BUTTON_HEIGHT)
+        btn.setProperty("tone", tone)
+        self._apply_button_style(btn, tone=tone)
         btn.clicked.connect(callback)
         return btn
 
@@ -506,52 +583,11 @@ class TranslationBox(QWidget):
         self._btn_overlay_font_up.setVisible(overlay_active)
         self._btn_overlay_close.setVisible(overlay_active)
 
-        if self._subtitle_mode == self.OVERLAY_OFF:
-            self._btn_subtitle.setStyleSheet(
-                """
-                QPushButton {
-                    background: rgba(30,30,40,180); color: white;
-                    border: none; border-radius: 3px; font-size: 11px;
-                }
-                QPushButton:hover { background: rgba(70,70,100,220); }
-                """
-            )
-            return
-
-        self._btn_subtitle.setStyleSheet(
-            """
-            QPushButton {
-                background: rgba(80,140,255,180); color: white;
-                border: none; border-radius: 3px; font-size: 11px;
-            }
-            QPushButton:hover { background: rgba(100,160,255,200); }
-            """
-        )
+        self._apply_button_style(self._btn_subtitle, active=self._subtitle_mode != self.OVERLAY_OFF)
 
     def _update_pin_button(self):
-        if self._position_locked:
-            self._btn_pin.setText("📍")
-            self._btn_pin.setStyleSheet(
-                """
-                QPushButton {
-                    background: rgba(80,140,255,180); color: white;
-                    border: none; border-radius: 3px; font-size: 11px;
-                }
-                QPushButton:hover { background: rgba(100,160,255,200); }
-                """
-            )
-            return
-
         self._btn_pin.setText("钉")
-        self._btn_pin.setStyleSheet(
-            """
-            QPushButton {
-                background: rgba(30,30,40,180); color: white;
-                border: none; border-radius: 3px; font-size: 11px;
-            }
-            QPushButton:hover { background: rgba(70,70,100,220); }
-            """
-        )
+        self._apply_button_style(self._btn_pin, active=self._position_locked)
 
     def _on_toggle_pin(self):
         self.set_position_locked(not self._position_locked)

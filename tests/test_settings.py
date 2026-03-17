@@ -17,9 +17,9 @@ def test_default_values():
     assert store.get('hotkey_explain') == 'alt+e'
     assert isinstance(store.get('translation_order'), list)
 
-def test_default_enabled_backends_exclude_bing():
+def test_default_enabled_backends_include_bing():
     store = make_store()
-    assert 'bing' not in store.get('enabled_backends')
+    assert 'bing' in store.get('enabled_backends')
 
 def test_set_and_persist():
     f = tempfile.NamedTemporaryFile(suffix='.json', delete=False)
@@ -66,9 +66,8 @@ def test_overlay_settings_persist():
     assert store2.get('overlay_font_delta') == 3
 
 def test_para_split_defaults():
-    import tempfile, os
-    from core.settings import SettingsStore
-    with tempfile.TemporaryDirectory() as d:
-        s = SettingsStore(os.path.join(d, 'settings.json'))
-        assert s.get('para_split_enabled') is True
-        assert s.get('para_gap_ratio') == 0.5
+    f = tempfile.NamedTemporaryFile(suffix='.json', delete=False)
+    f.close()
+    s = SettingsStore(f.name)
+    assert s.get('para_split_enabled') is True
+    assert s.get('para_gap_ratio') == 0.5

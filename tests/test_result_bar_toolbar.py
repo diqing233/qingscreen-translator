@@ -115,14 +115,14 @@ def test_box_mode_cycle_button_rotates_modes():
 
     bar._btn_box_mode_cycle.click()
     _app.processEvents()
-    assert bar._box_mode == 'multi'
-    assert bar._btn_box_mode_cycle.text() == BOX_MODE_META['multi'][0]
+    assert bar._box_mode == 'temp'
+    assert bar._btn_box_mode_cycle.text() == BOX_MODE_META['temp'][0]
 
     bar._btn_box_mode_cycle.click()
     _app.processEvents()
-    assert bar._box_mode == 'temp'
-    assert not bar._toggle.isVisible()
-    assert bar._btn_box_mode_cycle.text() == BOX_MODE_META['temp'][0]
+    assert bar._box_mode == 'multi'
+    assert bar._toggle.isVisible()
+    assert bar._btn_box_mode_cycle.text() == BOX_MODE_META['multi'][0]
 
     bar._btn_box_mode_cycle.click()
     _app.processEvents()
@@ -163,6 +163,43 @@ def test_retranslate_button_is_placed_between_copy_source_and_ai_buttons():
         source_pos.y(), copy_pos.y(), retranslate_pos.y(), ai_pos.y()
     ) <= 2
     assert source_pos.x() < copy_pos.x() < retranslate_pos.x() < ai_pos.x()
+
+
+def test_action_row_buttons_share_consistent_height():
+    bar = _make_bar()
+    bar.show_result(_result())
+    _app.processEvents()
+
+    heights = {
+        bar._btn_source.height(),
+        bar._btn_copy_src.height(),
+        bar._btn_retranslate.height(),
+        bar._btn_ai.height(),
+    }
+
+    assert len(heights) == 1
+
+
+def test_ai_split_button_emits_left_and_right_clicks_from_respective_regions():
+    bar = _make_bar()
+    left = []
+    right = []
+    bar._btn_ai.left_clicked.connect(lambda: left.append('left'))
+    bar._btn_ai.right_clicked.connect(lambda: right.append('right'))
+
+    left_event = MagicMock()
+    left_event.button.return_value = Qt.LeftButton
+    left_event.x.return_value = 2
+
+    right_event = MagicMock()
+    right_event.button.return_value = Qt.LeftButton
+    right_event.x.return_value = bar._btn_ai.width() - 2
+
+    bar._btn_ai.mousePressEvent(left_event)
+    bar._btn_ai.mousePressEvent(right_event)
+
+    assert left == ['left']
+    assert right == ['right']
 
 
 def test_content_splitter_starts_with_translation_panel_only():
