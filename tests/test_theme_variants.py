@@ -38,3 +38,27 @@ def test_unknown_button_style_variant_falls_back_to_calm():
     fallback = get_composed_skin('matrix', 'unknown-variant')
 
     assert fallback == calm
+
+
+def test_minimal_skin_exists_and_has_correct_tokens():
+    skin = theme.get_skin('minimal')
+
+    assert skin['dark'] == False
+    assert skin['bg_rgb'] == (248, 249, 250)
+    assert '26,26,46' in skin['btn_primary_bg']
+
+
+def test_coral_skin_exists_and_has_correct_tokens():
+    skin = theme.get_skin('coral')
+
+    assert skin['dark'] == False
+    assert skin['bg_rgb'] == (255, 245, 230)
+    assert '232,96,26' in skin['btn_primary_bg']
+
+
+def test_minimal_in_list_skins():
+    assert 'minimal' in theme.list_skins()
+
+
+def test_coral_in_list_skins():
+    assert 'coral' in theme.list_skins()
