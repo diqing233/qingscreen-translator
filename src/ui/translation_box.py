@@ -14,6 +14,7 @@ _RESIZE_CURSORS = {
 }
 _BUTTON_HEIGHT = 22
 _BUTTON_RADIUS = 5
+_BTN_PADDING   = "0 8px"
 
 
 class _SubtitleWindow(QWidget):
@@ -248,7 +249,7 @@ class TranslationBox(QWidget):
         hover_color="white",
         pressed_background=None,
         radius=_BUTTON_RADIUS,
-        padding="0 8px",
+        padding=_BTN_PADDING,
         font_size=None,
         font_weight=500,
     ):
