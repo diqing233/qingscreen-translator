@@ -1,10 +1,12 @@
 import logging
+import re
 from PyQt5.QtWidgets import (QWidget, QMainWindow, QLabel, QPushButton,
                               QHBoxLayout, QVBoxLayout, QApplication,
                               QSizePolicy, QMenu, QAction, QTextEdit,
                               QScrollArea, QFrame, QSplitter)
-from PyQt5.QtCore import Qt, QPoint, QRect, QSize, pyqtSignal, QTimer, QEvent
-from PyQt5.QtGui import QFont, QPainter, QPen, QColor, QIcon, QPixmap
+from PyQt5.QtCore import Qt, QPoint, QRect, QRectF, QPointF, QSize, pyqtSignal, QTimer, QEvent
+from PyQt5.QtGui import QFont, QPainter, QPen, QColor, QIcon, QPixmap, QPolygonF
+from ui.theme import get_skin, make_menu_qss, make_container_qss, make_scrollbar_qss
 
 logger = logging.getLogger(__name__)
 
@@ -59,20 +61,6 @@ TARGET_LANGS = [
     ('ru',    'RU',   'Русский'),
 ]
 
-DARK_MENU_STYLE = '''
-QMenu {
-    background: rgba(22, 22, 32, 240);
-    color: rgba(200, 200, 215, 230);
-    border: 1px solid rgba(255,255,255,30);
-    border-radius: 6px;
-    padding: 4px 2px;
-    font-size: 11px;
-}
-QMenu::item { padding: 5px 18px; border-radius: 3px; }
-QMenu::item:selected { background: rgba(80,130,255,180); color: white; }
-QMenu::item:checked { font-weight: bold; color: rgba(120,200,255,255); }
-'''
-
 _TOOLBAR_BUTTON_H = 22
 _TOOLBAR_ICON_W = 22
 _SMALL_TOOLBAR_BUTTON_W = 26
@@ -104,6 +92,61 @@ class _MinimizeProxy(QMainWindow):
             self._result_bar._restore_from_taskbar()
 
 
+class _ResetSizeBtn(QPushButton):
+    """恢复默认大小按钮，用 QPainter 绘制圆形刷新箭头"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._icon_color = QColor(160, 160, 185, 200)
+
+    def set_icon_color(self, color: QColor):
+        self._icon_color = color
+        self.update()
+
+    def paintEvent(self, event):
+        super().paintEvent(event)  # 先绘制背景/边框（来自 stylesheet）
+        import math
+
+        w, h = self.width(), self.height()
+        cx, cy = w / 2.0, h / 2.0
+        r = min(w, h) / 2.0 - 4.5
+
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+
+        col = QColor(self._icon_color)
+        if not self.isEnabled():
+            col.setAlpha(80)
+
+        pen = QPen(col, 1.6)
+        pen.setCapStyle(Qt.RoundCap)
+        p.setPen(pen)
+        p.setBrush(Qt.NoBrush)
+
+        # 圆弧：从 80° 开始，顺时针扫 300°，结束于 140°（缺口在顶部）
+        p.drawArc(QRectF(cx - r, cy - r, 2 * r, 2 * r), 80 * 16, -300 * 16)
+
+        # 箭头在 140° 处，指向顺时针方向
+        end_rad = math.radians(140.0)
+        ex = cx + r * math.cos(end_rad)
+        ey = cy - r * math.sin(end_rad)
+        tx = math.sin(end_rad)   # 顺时针切线 x
+        ty = -math.cos(end_rad)  # 顺时针切线 y
+
+        al = r * 0.48  # 箭头长度
+        aw = r * 0.32  # 箭头半宽
+        bx, by = ex - tx * al, ey - ty * al
+        px2, py2 = -ty, tx  # 垂直方向
+
+        p.setBrush(col)
+        p.setPen(Qt.NoPen)
+        p.drawPolygon(QPolygonF([
+            QPointF(ex, ey),
+            QPointF(bx + px2 * aw, by + py2 * aw),
+            QPointF(bx - px2 * aw, by - py2 * aw),
+        ]))
+        p.end()
+
+
 # ── 滑动切换控件 ──────────────────────────────────────────────────
 
 class TranslateToggle(QWidget):
@@ -115,9 +158,14 @@ class TranslateToggle(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._auto = False
+        self._skin = None   # 由外部调用 set_skin() 注入
         self.setFixedSize(self.W, self.H)
         self.setCursor(Qt.PointingHandCursor)
         self.setToolTip('点击切换：手动点击翻译 / 自动持续翻译')
+
+    def set_skin(self, skin: dict):
+        self._skin = skin
+        self.update()
 
     def set_auto(self, v: bool):
         self._auto = v
@@ -127,6 +175,7 @@ class TranslateToggle(QWidget):
         return QSize(self.W, self.H)
 
     def paintEvent(self, event):
+        s = self._skin or {}
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         w, h = self.width(), self.height()
@@ -134,13 +183,17 @@ class TranslateToggle(QWidget):
         mid = w // 2
 
         # Track background
-        p.setPen(QPen(QColor(255, 255, 255, 28), 1))
-        p.setBrush(QColor(29, 31, 41, 228))
+        track_border = QColor(*s.get('toggle_track_border', (255, 255, 255, 28)))
+        track_bg = QColor(*s.get('toggle_track', (29, 31, 41, 228)))
+        p.setPen(QPen(track_border, 1))
+        p.setBrush(track_bg)
         p.drawRoundedRect(0, 0, w - 1, h - 1, r, r)
 
         # Active pill
         pill_x = mid if self._auto else 0
-        pill_color = QColor(78, 170, 103, 224) if self._auto else QColor(82, 132, 236, 224)
+        auto_c = s.get('toggle_auto', (78, 170, 103, 224))
+        manual_c = s.get('toggle_manual', (82, 132, 236, 224))
+        pill_color = QColor(*auto_c) if self._auto else QColor(*manual_c)
         p.setBrush(pill_color)
         p.setPen(Qt.NoPen)
         p.drawRoundedRect(pill_x + 1, 1, mid - 2, h - 2, r - 1, r - 1)
@@ -150,13 +203,15 @@ class TranslateToggle(QWidget):
 
         # Text labels
         f = p.font()
-        f.setPixelSize(11)
+        f.setPixelSize(12)
         p.setFont(f)
 
-        p.setPen(QColor(255, 255, 255, 235 if not self._auto else 108))
+        txt_color = QColor(255, 255, 255, 235)
+        txt_dim = QColor(255, 255, 255, 108)
+        p.setPen(txt_dim if self._auto else txt_color)
         p.drawText(0, 0, mid, h, Qt.AlignCenter, '点击')
 
-        p.setPen(QColor(255, 255, 255, 235 if self._auto else 108))
+        p.setPen(txt_color if self._auto else txt_dim)
         p.drawText(mid, 0, mid, h, Qt.AlignCenter, '自动')
 
     def mousePressEvent(self, event):
@@ -182,10 +237,18 @@ class _SplitButton(QWidget):
         self._active = False
         self._hover_left = False
         self._hover_right = False
+        self._skin = None   # 由外部调用 set_skin() 注入
         self.setMouseTracking(True)
         self.setCursor(Qt.PointingHandCursor)
         self.setFixedHeight(_TOOLBAR_BUTTON_H)
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        f = self.font()
+        f.setPixelSize(12)
+        self.setFont(f)
+
+    def set_skin(self, skin: dict):
+        self._skin = skin
+        self.update()
 
     def sizeHint(self):
         left_w = self.fontMetrics().horizontalAdvance(self._left_label) + 16
@@ -200,6 +263,7 @@ class _SplitButton(QWidget):
         return self.width() - self._RIGHT_W
 
     def paintEvent(self, event):
+        s = self._skin or {}
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         w, h = self.width(), self.height()
@@ -210,9 +274,18 @@ class _SplitButton(QWidget):
         def a(v):
             return int(v * fade)
 
-        border = QColor(142, 165, 220, a(72)) if self._active else QColor(255, 255, 255, a(20))
-        background = QColor(74, 78, 98, a(194)) if self._active else QColor(58, 60, 74, a(192))
-        text_color = QColor(236, 239, 247, 236 if self._active else a(214))
+        if self._active:
+            _ab = s.get('split_active_bg', (74, 78, 98, 194))
+            _ac = s.get('split_active_border', (142, 165, 220, 72))
+            background = QColor(_ab[0], _ab[1], _ab[2], a(_ab[3]))
+            border = QColor(_ac[0], _ac[1], _ac[2], a(_ac[3]))
+        else:
+            _sb = s.get('split_bg', (58, 60, 74, 192))
+            _sc = s.get('split_border', (255, 255, 255, 20))
+            background = QColor(_sb[0], _sb[1], _sb[2], a(_sb[3]))
+            border = QColor(_sc[0], _sc[1], _sc[2], a(_sc[3]))
+        _tc = s.get('split_text', (236, 239, 247, 236))
+        text_color = QColor(_tc[0], _tc[1], _tc[2], _tc[3] if self._active else a(_tc[3]))
         hover_fill = QColor(255, 255, 255, 18 if self._active else 14)
 
         painter.setPen(QPen(border, 1))
@@ -326,18 +399,20 @@ class ResultBar(QWidget):
         self.resize(DEFAULT_W, DEFAULT_H)
         self._manual_size = True     # 防止 adjustSize() 在启动时压缩默认尺寸
 
+    @property
+    def _skin(self) -> dict:
+        """返回当前皮肤字典（从 settings 读取）。"""
+        return get_skin(
+            self.settings.get('skin', 'deep_space'),
+            self.settings.get('button_style_variant', 'calm'),
+        )
+
     def _get_bg_alpha(self) -> int:
         return max(30, min(255, int(self.settings.get('result_bar_opacity', 0.85) * 255)))
 
     def _apply_opacity(self):
         alpha = self._get_bg_alpha()
-        self._container.setStyleSheet(f'''
-            QWidget#ct {{
-                background: rgba(18, 18, 24, {alpha});
-                border-radius: 10px;
-                border: 1px solid rgba(255,255,255,25);
-            }}
-        ''')
+        self._container.setStyleSheet(make_container_qss(self._skin, alpha))
 
     def _position_window(self):
         screen = QApplication.primaryScreen().geometry()
@@ -392,36 +467,23 @@ class ResultBar(QWidget):
         self._btn_play = QPushButton('▶')
         self._btn_play.setToolTip('开始框选翻译（同 Alt+Q）\n按住拖动框选区域，按 ESC 取消')
         self._btn_play.setFixedSize(26, 22)
-        self._btn_play.setStyleSheet('''
-            QPushButton {
-                background: rgba(60,130,240,200); color: white;
-                border: 1px solid rgba(120,170,255,160);
-                border-radius: 4px; font-size: 11px; font-weight: bold;
-            }
-            QPushButton:hover { background: rgba(80,150,255,230); }
-        ''')
+        self._btn_play.setStyleSheet(self._play_btn_style())
         self._btn_play.clicked.connect(self.start_selection_requested.emit)
         tb.addWidget(self._btn_play)
         tb.addSpacing(4)
 
-        self._btn_stop_clear = QPushButton('■')
+        self._btn_stop_clear = QPushButton('')
         self._btn_stop_clear.setFixedSize(22, 22)
         self._btn_stop_clear.clicked.connect(self.stop_clear_requested.emit)
         tb.addWidget(self._btn_stop_clear)
         tb.addSpacing(4)
 
-        # ↺ 恢复默认大小按钮
-        self._btn_reset_size = QPushButton('↺')
+        # ↺ 恢复默认大小按钮（手绘圆形箭头）
+        self._btn_reset_size = _ResetSizeBtn()
         self._btn_reset_size.setToolTip('恢复结果条默认大小')
         self._btn_reset_size.setFixedSize(22, 22)
-        self._btn_reset_size.setStyleSheet('''
-            QPushButton {
-                background: rgba(50,50,65,180); color: rgba(160,160,185,215);
-                border: 1px solid rgba(255,255,255,15);
-                border-radius: 4px; font-size: 12px;
-            }
-            QPushButton:hover { background: rgba(70,70,95,220); color: white; }
-        ''')
+        self._btn_reset_size.setStyleSheet(self._neutral_small_btn_style())
+        self._btn_reset_size.set_icon_color(self._muted_qcolor())
         self._btn_reset_size.clicked.connect(self._reset_size)
         tb.addWidget(self._btn_reset_size)
         tb.addSpacing(4)
@@ -442,13 +504,14 @@ class ResultBar(QWidget):
         src_label = next((s for c, s, _ in SOURCE_LANGS if c == src_code), 'AUTO')
         self._btn_src_lang = QPushButton(f'{src_label} ▾')
         self._btn_src_lang.setToolTip('源语言（点击切换）')
+        self._btn_src_lang.setFixedHeight(_TOOLBAR_BUTTON_H)
         self._btn_src_lang.setStyleSheet(self._lang_btn_style())
         self._btn_src_lang.clicked.connect(self._show_src_lang_menu)
         tb.addWidget(self._btn_src_lang)
 
         # 箭头分隔
         arrow = QLabel('→')
-        arrow.setStyleSheet('color: rgba(120,120,140,180); font-size: 11px;')
+        arrow.setStyleSheet('color: rgba(120,120,140,180); font-size: 12px;')
         tb.addWidget(arrow)
 
         # 目标语言下拉按钮
@@ -456,6 +519,7 @@ class ResultBar(QWidget):
         tgt_label = next((s for c, s, _ in TARGET_LANGS if c == tgt_code), '简中')
         self._btn_tgt_lang = QPushButton(f'{tgt_label} ▾')
         self._btn_tgt_lang.setToolTip('目标翻译语言（点击切换）')
+        self._btn_tgt_lang.setFixedHeight(_TOOLBAR_BUTTON_H)
         self._btn_tgt_lang.setStyleSheet(self._lang_btn_style())
         self._btn_tgt_lang.clicked.connect(self._show_tgt_lang_menu)
         tb.addWidget(self._btn_tgt_lang)
@@ -463,7 +527,9 @@ class ResultBar(QWidget):
         tb.addSpacing(6)
 
         # 复制译文（工具栏快捷区）
-        self._btn_copy_trans = self._action_btn('📋', '复制译文到剪贴板', self._copy)
+        self._btn_copy_trans = self._icon_btn('', '复制译文到剪贴板', self._copy)
+        self._btn_copy_trans.setIcon(self._mk_icon(self._draw_copy))
+        self._btn_copy_trans.setIconSize(QSize(14, 14))
         tb.addWidget(self._btn_copy_trans)
 
         tb.addSpacing(6)
@@ -488,6 +554,7 @@ class ResultBar(QWidget):
 
         # 滑动切换：仅固定/多框模式显示
         self._toggle = TranslateToggle()
+        self._toggle.set_skin(self._skin)
         self._toggle.toggled.connect(self._on_toggle_changed)
         self._toggle.setVisible(self._box_mode != 'temp')
         tb.addWidget(self._toggle)
@@ -495,7 +562,9 @@ class ResultBar(QWidget):
         tb.addStretch()
 
         # 右侧图标按钮（固定在滚动区外，不随工具栏内容滚动）
-        self._btn_history  = self._icon_btn('🕐', '翻译历史 (History)', self.history_requested.emit)
+        self._btn_history  = self._icon_btn('', '翻译历史 (History)', self.history_requested.emit)
+        self._btn_history.setIcon(self._mk_icon(self._draw_clock, 18))
+        self._btn_history.setIconSize(QSize(18, 18))
         self._btn_settings = self._icon_btn('⚙', '设置 (Settings)', self.settings_requested.emit)
         self._btn_minimize = self._icon_btn('─', '最小化/展开', self._toggle_minimize)
         self._btn_close    = self._icon_btn('✕', '关闭主窗口', self.close_requested.emit)
@@ -506,18 +575,8 @@ class ResultBar(QWidget):
         self._tb_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._tb_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self._tb_scroll.setFrameShape(QFrame.NoFrame)
-        self._tb_scroll.setFixedHeight(32)
-        self._tb_scroll.setStyleSheet('''
-            QScrollArea { background: transparent; border: none; }
-            QScrollBar:horizontal {
-                background: rgba(255,255,255,8); height: 4px; border-radius: 2px;
-                margin: 0;
-            }
-            QScrollBar::handle:horizontal {
-                background: rgba(255,255,255,50); border-radius: 2px; min-width: 20px;
-            }
-            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
-        ''')
+        self._tb_scroll.setFixedHeight(26)
+        self._tb_scroll.setStyleSheet(self._tb_scroll_style())
         _tb_row = QHBoxLayout()
         _tb_row.setContentsMargins(0, 0, 0, 0)
         _tb_row.setSpacing(2)
@@ -533,10 +592,10 @@ class ResultBar(QWidget):
         self._set_active_mode_btn(self._box_mode)
 
         # 分隔线
-        sep = QWidget()
-        sep.setFixedHeight(1)
-        sep.setStyleSheet('background: rgba(255,255,255,18);')
-        cl.addWidget(sep)
+        self._sep = QWidget()
+        self._sep.setFixedHeight(1)
+        self._sep.setStyleSheet(f'background: {self._skin.get("sep_color", "rgba(255,255,255,18)")};')
+        cl.addWidget(self._sep)
 
         # ── 主体 ──────────────────────────────────────────────────
         self._body = QWidget()
@@ -548,11 +607,11 @@ class ResultBar(QWidget):
         self._content_splitter = QSplitter(Qt.Vertical)
         self._content_splitter.setChildrenCollapsible(False)
         self._content_splitter.setHandleWidth(6)
-        self._content_splitter.setStyleSheet('''
-            QSplitter::handle:vertical {
-                background: rgba(255,255,255,18);
+        self._content_splitter.setStyleSheet(f'''
+            QSplitter::handle:vertical {{
+                background: {self._skin.get('sep_color', 'rgba(255,255,255,18)')};
                 margin: 1px 0;
-            }
+            }}
         ''')
 
         self._translation_panel = QWidget()
@@ -574,19 +633,7 @@ class ResultBar(QWidget):
         self._lbl_translation.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self._lbl_translation.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self._lbl_translation.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self._lbl_translation.setStyleSheet('''
-            QTextEdit {
-                color: #f0f0f0; background: transparent; border: none;
-                padding: 0; margin: 0;
-            }
-            QScrollBar:vertical {
-                background: rgba(255,255,255,12); width: 6px; border-radius: 3px;
-            }
-            QScrollBar::handle:vertical {
-                background: rgba(255,255,255,55); border-radius: 3px; min-height: 18px;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-        ''')
+        self._lbl_translation.setStyleSheet(self._translation_text_style())
         translation_layout.addWidget(self._lbl_translation)
         self._content_splitter.addWidget(self._translation_panel)
 
@@ -597,23 +644,30 @@ class ResultBar(QWidget):
         ar.setSpacing(5)
         self._btn_source   = self._action_btn('原文 ▼', '展开/收起原始识别文字', self._toggle_source)
         self._btn_copy_src = self._action_btn('📋 原文', '复制原始识别文字到剪贴板', self._copy_source)
+        self._btn_copy_src.setText('原文')
+        self._btn_copy_src.setIcon(self._mk_icon(self._draw_copy))
+        self._btn_copy_src.setIconSize(QSize(14, 14))
         self._lbl_backend = QLabel('')
         self._lbl_backend.setStyleSheet('color: rgba(100,200,120,180); font-size: 10px;')
         self._resize_hint_lbl = QLabel('拖拽右下角调整大小 ⋱')
         self._resize_hint_lbl.setStyleSheet(
-            'color: rgba(160,160,185,190); font-size: 10px; padding: 0;'
+            f'color: {self._skin.get("text_muted", "rgba(160,160,185,190)")}; font-size: 10px; padding: 0;'
         )
         self._resize_hint_lbl.setToolTip('拖拽此处（右下角 20px 范围）调整窗口大小')
         ar.addWidget(self._btn_source)
         ar.addWidget(self._btn_copy_src)
-        self._btn_retranslate = self._action_btn('重新翻译', '使用当前原文内容重新翻译', self._on_retranslate)
+        self._btn_retranslate = self._action_btn('翻译', '使用当前原文内容重新翻译', self._on_retranslate)
         self._btn_retranslate.setEnabled(False)
         ar.addWidget(self._btn_retranslate)
         self._btn_ai = _SplitButton('💬 AI科普')
+        self._btn_ai.set_skin(self._skin)
         self._btn_ai.left_clicked.connect(self._on_explain)
         self._btn_ai.right_clicked.connect(self._toggle_explain_section)
         ar.addWidget(self._btn_ai)
         self._btn_para_num = self._action_btn('[#]', '显示/隐藏段落编号', self._toggle_para_numbers)
+        self._btn_para_num.setText('段落')
+        self._btn_para_num.setIcon(self._mk_icon(self._draw_paragraph))
+        self._btn_para_num.setIconSize(QSize(14, 14))
         ar.addWidget(self._btn_para_num)
         ar.addStretch()
         ar.addWidget(self._lbl_backend)
@@ -636,20 +690,7 @@ class ResultBar(QWidget):
         self._source_editor.setMinimumWidth(0)
         self._source_editor.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self._source_editor.setPlaceholderText('可在这里输入或修改要翻译的内容')
-        self._source_editor.setStyleSheet('''
-            QTextEdit {
-                color: rgba(225,225,235,230); background: rgba(255,255,255,6);
-                border: 1px solid rgba(255,255,255,18); border-radius: 6px;
-                padding: 6px;
-            }
-            QScrollBar:vertical {
-                background: rgba(255,255,255,12); width: 6px; border-radius: 3px;
-            }
-            QScrollBar::handle:vertical {
-                background: rgba(255,255,255,55); border-radius: 3px; min-height: 18px;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-        ''')
+        self._source_editor.setStyleSheet(self._source_editor_style())
         self._source_editor.textChanged.connect(self._on_source_text_changed)
         src_layout.addWidget(self._source_editor)
         self._explain_panel = QWidget()
@@ -673,20 +714,7 @@ class ResultBar(QWidget):
         self._explain_text.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self._explain_text.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._explain_text.setVisible(False)
-        self._explain_text.setStyleSheet('''
-            QTextEdit {
-                color: rgba(230,220,140,230); font-size: 12px;
-                background: rgba(255,240,100,10); border: none;
-                padding: 4px; border-radius: 4px;
-            }
-            QScrollBar:vertical {
-                background: rgba(255,255,255,12); width: 6px; border-radius: 3px;
-            }
-            QScrollBar::handle:vertical {
-                background: rgba(255,255,160,60); border-radius: 3px; min-height: 18px;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-        ''')
+        self._explain_text.setStyleSheet(self._explain_text_style())
         explain_layout.addWidget(self._explain_text)
 
         bl.addWidget(self._content_splitter, 1)
@@ -720,7 +748,7 @@ class ResultBar(QWidget):
         disabled_color: str = 'rgba(170,174,190,130)',
         radius: int = _BUTTON_RADIUS,
         padding: str = '0 8px',
-        font_size: int = 11,
+        font_size: int = 12,
         font_weight: int = 500,
     ) -> str:
         pressed_background = pressed_background or hover_background
@@ -750,81 +778,121 @@ class ResultBar(QWidget):
             }}
         '''
 
+    def _play_btn_style(self) -> str:
+        s = self._skin
+        return self._solid_button_style(
+            background=s['btn_primary_bg'],
+            color='white',
+            border=s['btn_primary_border'],
+            hover_background=s['btn_primary_hover'],
+            padding='0 6px',
+            font_size=int(s.get('button_font_size_toolbar', 12)),
+            font_weight=700,
+        )
+
+    def _neutral_small_btn_style(self) -> str:
+        s = self._skin
+        return self._solid_button_style(
+            background=s['btn_bg'],
+            color=s.get('text_muted', s['btn_fg']),
+            border=s['btn_border'],
+            hover_background=s['btn_hover'],
+            padding='0 4px',
+            font_size=15,
+        )
+
     def _action_btn_style(self, active: bool = False) -> str:
+        s = self._skin
         if active:
             return self._solid_button_style(
-                background='rgba(72,78,98,198)',
-                color='rgba(238,241,248,235)',
-                border='rgba(142,165,220,76)',
-                hover_background='rgba(84,92,114,214)',
+                background=s['btn_active_bg'],
+                color=s['btn_active_fg'],
+                border=s['btn_active_border'],
+                hover_background=s['btn_active_hover'],
                 padding='0 9px',
+                font_size=int(s.get('button_font_size_action', 12)),
+                font_weight=int(s.get('button_font_weight', 600)),
             )
         return self._solid_button_style(
-            background='rgba(58,60,74,190)',
-            color='rgba(212,216,228,226)',
-            border='rgba(255,255,255,18)',
-            hover_background='rgba(70,74,90,210)',
+            background=s['btn_bg'],
+            color=s['btn_fg'],
+            border=s['btn_border'],
+            hover_background=s['btn_hover'],
             padding='0 9px',
+            font_size=int(s.get('button_font_size_action', 12)),
+            font_weight=int(s.get('button_font_weight', 600)),
         )
 
     def _small_toolbar_btn(self, label: str, tip: str, callback) -> QPushButton:
         btn = QPushButton(label)
         btn.setToolTip(tip)
         btn.setFixedSize(_SMALL_TOOLBAR_BUTTON_W, _TOOLBAR_BUTTON_H)
-        btn.setStyleSheet(
-            self._solid_button_style(
-                background='rgba(54,56,70,188)',
-                color='rgba(214,218,230,226)',
-                border='rgba(255,255,255,18)',
-                hover_background='rgba(68,72,88,210)',
-                padding='0 6px',
-                font_size=10,
-                font_weight=600,
-            )
-        )
+        btn.setStyleSheet(self._small_toolbar_btn_style())
         btn.clicked.connect(callback)
         return btn
 
+    def _small_toolbar_btn_style(self) -> str:
+        s = self._skin
+        return self._solid_button_style(
+            background=s['btn_bg'],
+            color=s['btn_fg'],
+            border=s['btn_border'],
+            hover_background=s['btn_hover'],
+            padding='0 6px',
+            font_size=int(s.get('button_font_size_compact', 12)),
+            font_weight=600,
+        )
+
     def _mode_btn_style(self, active: bool) -> str:
+        s = self._skin
         if active:
             return self._solid_button_style(
-                background='rgba(80,140,255,204)',
+                background=s['btn_mode_active_bg'],
                 color='white',
-                border='rgba(128,176,255,184)',
-                hover_background='rgba(98,156,255,220)',
+                border=s['btn_mode_active_border'],
+                hover_background=s['btn_mode_active_hover'],
                 padding='0 8px',
+                font_size=int(s.get('button_font_size_toolbar', 12)),
                 font_weight=600,
             )
         return self._solid_button_style(
-            background='rgba(54,56,70,186)',
-            color='rgba(188,192,208,212)',
-            border='rgba(255,255,255,16)',
-            hover_background='rgba(68,72,88,206)',
+            background=s['btn_bg'],
+            color=s['btn_fg'],
+            border=s['btn_border'],
+            hover_background=s['btn_hover'],
             padding='0 8px',
+            font_size=int(s.get('button_font_size_toolbar', 12)),
             font_weight=500,
         )
 
     def _lang_btn_style(self) -> str:
+        s = self._skin
         return self._solid_button_style(
-            background='rgba(52,54,68,184)',
-            color='rgba(176,180,198,220)',
-            border='rgba(255,255,255,16)',
-            hover_background='rgba(66,70,86,204)',
-            hover_color='rgba(220,228,245,236)',
+            background=s['btn_bg'],
+            color=s['btn_fg'],
+            border=s['btn_border'],
+            hover_background=s['btn_hover'],
+            hover_color=s.get('text', 'white'),
             padding='0 10px',
+            font_size=int(s.get('button_font_size_toolbar', 12)),
         )
+
+    def _icon_btn_style(self) -> str:
+        s = self._skin
+        muted = s.get('text_muted', 'rgba(166,170,186,204)')
+        return f'''
+            QPushButton {{ background: transparent; color: {muted};
+                          border: none; font-size: 13px; }}
+            QPushButton:hover {{ color: {s.get('text', 'white')}; background: rgba(255,255,255,12);
+                                border-radius: 4px; }}
+            QPushButton:pressed {{ background: rgba(255,255,255,18); }}
+        '''
 
     def _icon_btn(self, icon: str, tip: str, cb) -> QPushButton:
         b = QPushButton(icon)
         b.setToolTip(tip)
         b.setFixedSize(_TOOLBAR_ICON_W, _TOOLBAR_BUTTON_H)
-        b.setStyleSheet('''
-            QPushButton { background: transparent; color: rgba(166,170,186,204);
-                          border: none; font-size: 12px; }
-            QPushButton:hover { color: white; background: rgba(255,255,255,12);
-                                border-radius: 4px; }
-            QPushButton:pressed { background: rgba(255,255,255,18); }
-        ''')
+        b.setStyleSheet(self._icon_btn_style())
         b.clicked.connect(cb)
         return b
 
@@ -836,27 +904,163 @@ class ResultBar(QWidget):
         b.clicked.connect(cb)
         return b
 
+    # ── 线条图标工厂 ──────────────────────────────────────────────
+
+    def _muted_qcolor(self) -> QColor:
+        raw = self._skin.get('button_icon_stroke', self._skin.get('text_muted', ''))
+        if raw.startswith('#'):
+            return QColor(raw)
+        m = re.match(r'rgba?\s*\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)(?:[,\s]+(\d+))?\s*\)', raw)
+        if m:
+            a = int(m.group(4)) if m.group(4) else 255
+            return QColor(int(m.group(1)), int(m.group(2)), int(m.group(3)), a)
+        return QColor(185, 192, 215, 200)
+
+    def _mk_icon(self, draw_fn, size: int = 14) -> QIcon:
+        color = self._muted_qcolor()
+        pm = QPixmap(size, size)
+        pm.fill(Qt.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.Antialiasing)
+        pen = QPen(color, 1.4, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+        p.setPen(pen)
+        p.setBrush(Qt.NoBrush)
+        draw_fn(p, size)
+        p.end()
+        return QIcon(pm)
+
+    @staticmethod
+    def _draw_copy(p: QPainter, s: int):
+        # 后页（右上）
+        p.drawRect(int(s*0.32), int(s*0.02), int(s*0.60), int(s*0.65))
+        # 前页（左下）
+        p.drawRect(int(s*0.08), int(s*0.33), int(s*0.60), int(s*0.65))
+
+    @staticmethod
+    def _draw_broom(p: QPainter, s: int):
+        # 扫帚柄（对角线）
+        p.drawLine(int(s*0.82), int(s*0.05), int(s*0.38), int(s*0.52))
+        # 绑扎处（横杆）
+        p.drawLine(int(s*0.18), int(s*0.56), int(s*0.52), int(s*0.44))
+        # 三根刷毛
+        p.drawLine(int(s*0.18), int(s*0.56), int(s*0.04), int(s*0.95))
+        p.drawLine(int(s*0.32), int(s*0.52), int(s*0.30), int(s*0.95))
+        p.drawLine(int(s*0.52), int(s*0.44), int(s*0.60), int(s*0.92))
+
+    @staticmethod
+    def _draw_clock(p: QPainter, s: int):
+        import math
+        r = int(s * 0.41)
+        cx, cy = s // 2, s // 2
+        p.drawEllipse(cx - r, cy - r, 2*r, 2*r)
+        # 4 个刻度（12/3/6/9 点位置）
+        tick_outer = r
+        tick_inner = int(r * 0.72)
+        for angle_deg in (0, 90, 180, 270):
+            rad = math.radians(angle_deg - 90)
+            x1 = cx + int(tick_outer * math.cos(rad))
+            y1 = cy + int(tick_outer * math.sin(rad))
+            x2 = cx + int(tick_inner * math.cos(rad))
+            y2 = cy + int(tick_inner * math.sin(rad))
+            p.drawLine(x1, y1, x2, y2)
+        # 时针（指向 10 点）
+        p.drawLine(cx, cy, cx - int(r*0.45), cy - int(r*0.55))
+        # 分针（指向 12 点）
+        p.drawLine(cx, cy, cx, cy - int(r*0.72))
+
+    @staticmethod
+    def _draw_square(p: QPainter, s: int):
+        # 绘制填充的正方形（用于停止/清空按钮）
+        margin = int(s * 0.25)
+        p.setBrush(p.pen().color())  # 使用当前画笔颜色填充
+        p.drawRect(margin, margin, s - 2*margin, s - 2*margin)
+
+    @staticmethod
+    def _draw_paragraph(p: QPainter, s: int):
+        line_x = int(s * 0.18)
+        line_w = int(s * 0.52)
+        for idx, y in enumerate((0.20, 0.44, 0.68)):
+            p.drawLine(line_x, int(s * y), line_x + line_w, int(s * y))
+            if idx < 2:
+                p.drawLine(int(s * 0.82), int(s * y), int(s * 0.92), int(s * y))
+
+    def _tb_scroll_style(self) -> str:
+        s = self._skin
+        return f'''
+            QScrollArea {{ background: transparent; border: none; }}
+            QScrollBar:horizontal {{
+                background: {s.get('scrollbar_bg', 'rgba(255,255,255,8)')}; height: 4px; border-radius: 2px; margin: 0;
+            }}
+            QScrollBar::handle:horizontal {{
+                background: {s.get('scrollbar_handle', 'rgba(255,255,255,50)')}; border-radius: 2px; min-width: 20px;
+            }}
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0; }}
+        '''
+
+    def _translation_text_style(self) -> str:
+        s = self._skin
+        sb = make_scrollbar_qss(s)
+        return f'''
+            QTextEdit {{
+                color: {s.get('text', '#f0f0f0')}; background: transparent; border: none;
+                padding: 0; margin: 0;
+            }}
+            {sb}
+        '''
+
+    def _source_editor_style(self) -> str:
+        s = self._skin
+        sb = make_scrollbar_qss(s)
+        bg = s.get('source_editor_bg', 'rgba(255,255,255,6)')
+        border = s.get('source_editor_border', 'rgba(255,255,255,18)')
+        text = s.get('source_editor_text', 'rgba(225,225,235,230)')
+        return f'''
+            QTextEdit {{
+                color: {text}; background: {bg};
+                border: 1px solid {border}; border-radius: 6px;
+                padding: 6px;
+            }}
+            {sb}
+        '''
+
+    def _explain_text_style(self) -> str:
+        s = self._skin
+        sb = make_scrollbar_qss(s)
+        bg = s.get('explain_bg', 'rgba(255,240,100,10)')
+        text = s.get('explain_text', 'rgba(230,220,140,230)')
+        return f'''
+            QTextEdit {{
+                color: {text}; font-size: 12px;
+                background: {bg}; border: none;
+                padding: 4px; border-radius: 4px;
+            }}
+            {sb}
+        '''
+
     def _update_lang_button_widths(self):
         for btn in (self._btn_src_lang, self._btn_tgt_lang):
             min_width = max(btn.sizeHint().width(), btn.fontMetrics().horizontalAdvance(btn.text()) + 20)
             btn.setMinimumWidth(min_width)
 
     def _stop_clear_btn_style(self, busy: bool) -> str:
+        s = self._skin
         if busy:
             return self._solid_button_style(
-                background='rgba(182,84,54,198)',
+                background=s['btn_stop_bg'],
                 color='white',
-                border='rgba(246,169,138,130)',
-                hover_background='rgba(210,96,62,220)',
+                border=s['btn_stop_border'],
+                hover_background=s['btn_stop_hover'],
                 padding='0 8px',
+                font_size=int(s.get('button_font_size_toolbar', 12)),
                 font_weight=700,
             )
         return self._solid_button_style(
-            background='rgba(54,56,70,188)',
-            color='rgba(214,218,230,226)',
-            border='rgba(255,255,255,18)',
-            hover_background='rgba(68,72,88,210)',
+            background=s['btn_bg'],
+            color=s['btn_fg'],
+            border=s['btn_border'],
+            hover_background=s['btn_hover'],
             padding='0 8px',
+            font_size=int(s.get('button_font_size_toolbar', 12)),
             font_weight=600,
         )
 
@@ -877,15 +1081,17 @@ class ResultBar(QWidget):
 
     def set_stop_clear_busy(self, busy: bool):
         self._translation_busy = busy
-        tooltip = '终止当前翻译' if busy else '清空当前翻译内容'
-        self._btn_stop_clear.setToolTip(tooltip)
+        self._btn_stop_clear.setToolTip('停止或清空当前翻译内容')
+        self._btn_stop_clear.setText('')
+        self._btn_stop_clear.setIcon(self._mk_icon(self._draw_square))
+        self._btn_stop_clear.setIconSize(QSize(14, 14))
         self._btn_stop_clear.setStyleSheet(self._stop_clear_btn_style(busy))
 
     # ── 语言下拉菜单 ──────────────────────────────────────────────
 
     def _show_src_lang_menu(self):
         menu = QMenu(self)
-        menu.setStyleSheet(DARK_MENU_STYLE)
+        menu.setStyleSheet(make_menu_qss(self._skin))
         current = self.settings.get('source_language', 'auto')
         for code, short, full in SOURCE_LANGS:
             act = QAction(f'{short}  {full}', self)
@@ -905,7 +1111,7 @@ class ResultBar(QWidget):
 
     def _show_tgt_lang_menu(self):
         menu = QMenu(self)
-        menu.setStyleSheet(DARK_MENU_STYLE)
+        menu.setStyleSheet(make_menu_qss(self._skin))
         current = self.settings.get('target_language', 'zh-CN')
         for code, short, full in TARGET_LANGS:
             act = QAction(f'{short}  {full}', self)
@@ -1192,6 +1398,67 @@ class ResultBar(QWidget):
 
     def refresh_opacity(self):
         self._apply_opacity()
+
+    def apply_skin(self):
+        """皮肤改变后重新应用所有 UI 样式。"""
+        s = self._skin
+        # 容器
+        self._apply_opacity()
+        # 分隔线 & 分割器
+        self._sep.setStyleSheet(f'background: {s.get("sep_color", "rgba(255,255,255,18)")};')
+        self._content_splitter.setStyleSheet(f'''
+            QSplitter::handle:vertical {{
+                background: {s.get("sep_color", "rgba(255,255,255,18)")};
+                margin: 1px 0;
+            }}
+        ''')
+        # 工具栏滚动区
+        self._tb_scroll.setStyleSheet(self._tb_scroll_style())
+        # 播放按钮
+        self._btn_play.setStyleSheet(self._play_btn_style())
+        self._btn_reset_size.setStyleSheet(self._neutral_small_btn_style())
+        self._btn_reset_size.set_icon_color(self._muted_qcolor())
+        # 模式按钮（从当前状态重建）
+        self._set_active_mode_btn(self._box_mode)
+        # 语言按钮
+        self._btn_src_lang.setStyleSheet(self._lang_btn_style())
+        self._btn_tgt_lang.setStyleSheet(self._lang_btn_style())
+        # 停止/清空按钮
+        self._btn_stop_clear.setStyleSheet(self._stop_clear_btn_style(self._translation_busy))
+        # 各种动作按钮
+        for btn in (self._btn_source, self._btn_copy_src,
+                    self._btn_retranslate, self._btn_para_num):
+            btn.setStyleSheet(self._action_btn_style(False))
+        self._btn_source.setStyleSheet(self._action_btn_style(self._source_expanded))
+        self._btn_para_num.setStyleSheet(self._action_btn_style(self._show_para_numbers))
+        # 小工具栏按钮（覆盖相关）
+        for name in ('_btn_overlay_font_down', '_btn_overlay_font_up', '_btn_overlay_close',
+                     '_btn_overlay'):
+            btn = getattr(self, name, None)
+            if btn is not None:
+                btn.setStyleSheet(self._small_toolbar_btn_style())
+        # 图标按钮
+        for btn in (self._btn_copy_trans, self._btn_history, self._btn_settings, self._btn_minimize, self._btn_close):
+            btn.setStyleSheet(self._icon_btn_style())
+        # 线条图标随皮肤重绘
+        self._btn_copy_trans.setIcon(self._mk_icon(self._draw_copy))
+        self._btn_copy_src.setIcon(self._mk_icon(self._draw_copy))
+        self._btn_history.setIcon(self._mk_icon(self._draw_clock, 18))
+        self._btn_history.setIconSize(QSize(18, 18))
+        self._btn_para_num.setIcon(self._mk_icon(self._draw_paragraph))
+        self._btn_stop_clear.setIcon(self._mk_icon(self._draw_square))
+        self._btn_stop_clear.setIconSize(QSize(14, 14))
+        # TranslateToggle
+        self._toggle.set_skin(s)
+        # SplitButton (AI科普)
+        self._btn_ai.set_skin(s)
+        # 文本区域
+        self._lbl_translation.setStyleSheet(self._translation_text_style())
+        self._source_editor.setStyleSheet(self._source_editor_style())
+        self._explain_text.setStyleSheet(self._explain_text_style())
+        # 辅助标签
+        muted = s.get('text_muted', 'rgba(160,160,185,190)')
+        self._resize_hint_lbl.setStyleSheet(f'color: {muted}; font-size: 10px; padding: 0;')
 
     def apply_settings(self):
         """设置保存后立刻应用位置和大小。"""

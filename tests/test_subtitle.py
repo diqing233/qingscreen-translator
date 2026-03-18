@@ -10,11 +10,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 _app = QApplication.instance() or QApplication(sys.argv)
 
 
-def _make_box(overlay_default_mode='off', overlay_font_delta=0):
+def _make_box(overlay_default_mode='off', overlay_font_delta=0, **overrides):
     values = {
         'overlay_default_mode': overlay_default_mode,
         'overlay_font_delta': overlay_font_delta,
+        'skin': 'deep_space',
+        'button_style_variant': 'calm',
     }
+    values.update(overrides)
     settings = MagicMock()
     settings.get.side_effect = lambda key, default=None: values.get(key, default)
     settings.set.side_effect = lambda key, value: values.__setitem__(key, value)
@@ -226,14 +229,25 @@ def test_pin_button_locks_current_box_position():
     assert box.pos() == initial_pos
 
 
-def test_pin_button_keeps_consistent_label_when_locked():
+def test_pin_button_uses_icon_when_locked():
     box, _ = _make_box()
 
-    assert box._btn_pin.text() == "钉"
+    assert box._btn_pin.text() == ""
+    assert not box._btn_pin.icon().isNull()
 
     box._on_toggle_pin()
 
-    assert box._btn_pin.text() == "钉"
+    assert box._btn_pin.text() == ""
+    assert not box._btn_pin.icon().isNull()
+
+
+def test_button_style_variant_changes_translation_box_button_styles():
+    calm, _ = _make_box(button_style_variant='calm')
+    semantic, _ = _make_box(button_style_variant='semantic')
+
+    assert calm._btn_translate.styleSheet() != semantic._btn_translate.styleSheet()
+    assert calm._skin['button_style_variant'] == 'calm'
+    assert semantic._skin['button_style_variant'] == 'semantic'
 
 
 def test_locked_temp_box_does_not_emit_close_on_dismiss_timeout():

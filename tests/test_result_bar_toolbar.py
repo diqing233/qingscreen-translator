@@ -2,6 +2,7 @@ import os
 import sys
 from unittest.mock import MagicMock
 
+import pytest
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication
 
@@ -10,7 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 _app = QApplication.instance() or QApplication(sys.argv)
 
 
-def _make_settings():
+def _make_settings(**overrides):
     settings = MagicMock()
     values = {
         'source_language': 'auto',
@@ -19,7 +20,10 @@ def _make_settings():
         'result_bar_opacity': 0.85,
         'overlay_default_mode': 'off',
         'overlay_font_delta': 0,
+        'skin': 'deep_space',
+        'button_style_variant': 'calm',
     }
+    values.update(overrides)
 
     def get_value(key, default=None):
         return values.get(key, default)
@@ -30,10 +34,10 @@ def _make_settings():
     return settings
 
 
-def _make_bar():
+def _make_bar(**overrides):
     from ui.result_bar import ResultBar
 
-    bar = ResultBar(_make_settings())
+    bar = ResultBar(_make_settings(**overrides))
     bar.show()
     _app.processEvents()
     return bar
@@ -417,3 +421,23 @@ def test_clear_current_content_resets_source_editor_and_explain_panel():
     assert not bar._explain_panel.isVisible()
     assert not bar._btn_retranslate.isEnabled()
     assert bar._explain_text.toPlainText() == ''
+
+
+def test_button_style_variant_changes_result_bar_button_styles():
+    calm = _make_bar(button_style_variant='calm')
+    semantic = _make_bar(button_style_variant='semantic')
+
+    assert calm._btn_play.styleSheet() != semantic._btn_play.styleSheet()
+    assert calm._btn_retranslate.styleSheet() != semantic._btn_retranslate.styleSheet()
+
+
+@pytest.mark.parametrize('variant', ['calm', 'semantic'])
+def test_result_bar_uses_custom_copy_and_broom_icons_for_each_variant(variant):
+    bar = _make_bar(button_style_variant=variant)
+    bar.set_stop_clear_busy(False)
+
+    assert bar._skin['button_style_variant'] == variant
+    assert not bar._btn_copy_trans.icon().isNull()
+    assert not bar._btn_copy_src.icon().isNull()
+    assert '📋' not in bar._btn_copy_src.text()
+    assert not bar._btn_stop_clear.icon().isNull()

@@ -1,6 +1,9 @@
-from PyQt5.QtCore import QPoint, QRect, QTimer, Qt, pyqtSignal
-from PyQt5.QtGui import QColor, QCursor, QPainter, QPen
+import re
+
+from PyQt5.QtCore import QPoint, QRect, QSize, QTimer, Qt, pyqtSignal
+from PyQt5.QtGui import QColor, QCursor, QIcon, QPainter, QPen, QPixmap
 from PyQt5.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from ui.theme import get_skin
 
 _RESIZE_MARGIN = 8
 _RESIZE_CURSORS = {
@@ -170,6 +173,9 @@ class TranslationBox(QWidget):
 
         self._btn_translate = self._make_btn("译", "立即翻译", lambda: self.translate_requested.emit(self), tone="primary")
         self._btn_pin = self._make_btn("钉", "固定/取消固定", self._on_toggle_pin)
+        self._btn_pin.setText("")
+        self._btn_pin.setIcon(self._make_icon(self._draw_pin))
+        self._btn_pin.setIconSize(QSize(int(self._skin.get('button_icon_size_toolbar', 14)), int(self._skin.get('button_icon_size_toolbar', 14))))
         self._btn_subtitle = self._make_btn("⊞", "覆盖翻译", self._on_toggle_subtitle)
         self._btn_overlay_font_down = self._make_btn(
             "A-",
@@ -225,7 +231,9 @@ class TranslationBox(QWidget):
         self._corner_bar.raise_()
 
         self._ocr_label = QLabel("")
-        self._ocr_label.setStyleSheet("color: rgba(220,220,220,160); font-size: 10px;")
+        self._ocr_label.setStyleSheet(
+            f"color: {self._skin.get('text_ocr', 'rgba(220,220,220,160)')}; font-size: 10px;"
+        )
         self._ocr_label.setWordWrap(True)
         layout.addWidget(self._ocr_label)
         layout.addStretch()
@@ -240,10 +248,12 @@ class TranslationBox(QWidget):
         hover_color="white",
         pressed_background=None,
         radius=_BUTTON_RADIUS,
-        font_size=11,
+        font_size=None,
         font_weight=500,
     ):
         pressed_background = pressed_background or hover_background
+        if font_size is None:
+            font_size = int(self._skin.get('button_font_size_compact', 12))
         return f"""
             QPushButton {{
                 background: {background};
@@ -263,15 +273,69 @@ class TranslationBox(QWidget):
             }}
         """
 
+    def _icon_color(self, *, active: bool = False) -> QColor:
+        token = 'button_icon_active_stroke' if active else 'button_icon_stroke'
+        raw = self._skin.get(token, self._skin.get('text_muted', 'rgba(220,220,220,220)'))
+        if raw.startswith('#'):
+            return QColor(raw)
+        match = re.match(r'rgba?\s*\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)(?:[,\s]+(\d+))?\s*\)', raw)
+        if match:
+            alpha = int(match.group(4)) if match.group(4) else 255
+            return QColor(int(match.group(1)), int(match.group(2)), int(match.group(3)), alpha)
+        return QColor(220, 220, 220, 220)
+
+    def _make_icon(self, draw_fn, *, active: bool = False) -> QIcon:
+        size = int(self._skin.get('button_icon_size_toolbar', 14))
+        pixmap = QPixmap(size, size)
+        pixmap.fill(Qt.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(QPen(self._icon_color(active=active), 1.4, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        painter.setBrush(Qt.NoBrush)
+        draw_fn(painter, size)
+        painter.end()
+        return QIcon(pixmap)
+
+    @staticmethod
+    def _draw_pin(painter: QPainter, size: int):
+        """45度斜插图钉：实心圆帽 + 颈杆 + 肩横杆 + 针杆，帽朝左上针尖朝右下。"""
+        s = size
+        painter.save()
+        painter.translate(s / 2.0, s / 2.0)
+        painter.rotate(-45)
+        painter.translate(-s / 2.0, -s / 2.0)
+        cx = s // 2
+        # 实心圆帽
+        hr = int(s * 0.18)
+        hy = int(s * 0.28)
+        painter.setBrush(painter.pen().color())
+        painter.drawEllipse(cx - hr, hy - hr, hr * 2, hr * 2)
+        painter.setBrush(Qt.NoBrush)
+        # 颈杆
+        painter.drawLine(cx, hy + hr, cx, int(s * 0.52))
+        # 肩横杆
+        painter.drawLine(int(cx - s * 0.15), int(s * 0.52), int(cx + s * 0.15), int(s * 0.52))
+        # 针杆
+        painter.drawLine(cx, int(s * 0.52), cx, int(s * 0.84))
+        painter.restore()
+
+    @property
+    def _skin(self) -> dict:
+        return get_skin(
+            self.settings.get('skin', 'deep_space'),
+            self.settings.get('button_style_variant', 'calm'),
+        )
+
     def _apply_button_style(self, btn, *, active=False, tone=None):
+        s = self._skin
         tone = tone or btn.property("tone") or "neutral"
         if tone == "primary":
             btn.setStyleSheet(
                 self._button_style(
-                    background="rgba(82,132,236,216)",
+                    background=s['btn_primary_bg'],
                     color="white",
-                    border="rgba(134,176,255,180)",
-                    hover_background="rgba(98,150,248,230)",
+                    border=s['btn_primary_border'],
+                    hover_background=s['btn_primary_hover'],
                     font_weight=600,
                 )
             )
@@ -279,10 +343,10 @@ class TranslationBox(QWidget):
         if tone == "danger":
             btn.setStyleSheet(
                 self._button_style(
-                    background="rgba(168,82,56,198)",
+                    background=s['btn_danger_bg'],
                     color="white",
-                    border="rgba(236,164,134,120)",
-                    hover_background="rgba(196,94,64,218)",
+                    border=s['btn_danger_border'],
+                    hover_background=s['btn_danger_hover'],
                     font_weight=600,
                 )
             )
@@ -290,19 +354,19 @@ class TranslationBox(QWidget):
         if active:
             btn.setStyleSheet(
                 self._button_style(
-                    background="rgba(74,78,98,198)",
-                    color="rgba(240,242,248,236)",
-                    border="rgba(142,165,220,72)",
-                    hover_background="rgba(86,92,114,214)",
+                    background=s['btn_active_bg'],
+                    color=s['btn_active_fg'],
+                    border=s['btn_active_border'],
+                    hover_background=s['btn_active_hover'],
                 )
             )
             return
         btn.setStyleSheet(
             self._button_style(
-                background="rgba(54,56,70,190)",
-                color="rgba(216,220,232,226)",
-                border="rgba(255,255,255,18)",
-                hover_background="rgba(68,72,88,210)",
+                background=s['btn_bg'],
+                color=s['btn_fg'],
+                border=s['btn_border'],
+                hover_background=s['btn_hover'],
             )
         )
 
@@ -374,19 +438,23 @@ class TranslationBox(QWidget):
 
     def _apply_over_subtitle_style(self, win):
         self._apply_font(win)
+        s = self._skin
+        bg = QColor(*s.get('overlay_bg', (6, 10, 16, 244)))
+        text = QColor(s.get('overlay_text', '#f0f8ff'))
+        border = QColor(*s.get('overlay_border', (150, 190, 235, 110)))
         win.set_surface_style(
-            style_sheet="""
-            QLabel {
-                background: rgba(6, 10, 16, 244);
-                color: rgb(240, 248, 255);
+            style_sheet=f"""
+            QLabel {{
+                background: rgba({bg.red()}, {bg.green()}, {bg.blue()}, {bg.alpha()});
+                color: {s.get('overlay_text', '#f0f8ff')};
                 padding: 6px 10px 7px 10px;
-                border: 1px solid rgba(150, 190, 235, 110);
+                border: 1px solid rgba({border.red()}, {border.green()}, {border.blue()}, {border.alpha()});
                 border-radius: 2px;
-            }
+            }}
             """,
-            bg_color=QColor(6, 10, 16, 244),
-            text_color=QColor(240, 248, 255),
-            border_color=QColor(150, 190, 235, 110),
+            bg_color=bg,
+            text_color=text,
+            border_color=border,
             radius=2,
             margins=(10, 6, 10, 7),
             alignment=Qt.AlignLeft | Qt.AlignTop,
@@ -394,19 +462,23 @@ class TranslationBox(QWidget):
 
     def _apply_below_subtitle_style(self, win):
         self._apply_font(win)
+        s = self._skin
+        bg = QColor(*s.get('overlay_below_bg', (6, 10, 16, 232)))
+        text = QColor(s.get('overlay_below_text', '#f0f0f0'))
+        border = QColor(*s.get('overlay_below_border', (120, 165, 230, 90)))
         win.set_surface_style(
-            style_sheet="""
-            QLabel {
-                background: rgba(6, 10, 16, 232);
-                color: #f0f0f0;
+            style_sheet=f"""
+            QLabel {{
+                background: rgba({bg.red()}, {bg.green()}, {bg.blue()}, {bg.alpha()});
+                color: {s.get('overlay_below_text', '#f0f0f0')};
                 padding: 6px 12px;
-                border: 1px solid rgba(120, 165, 230, 90);
+                border: 1px solid rgba({border.red()}, {border.green()}, {border.blue()}, {border.alpha()});
                 border-radius: 0px 0px 6px 6px;
-            }
+            }}
             """,
-            bg_color=QColor(6, 10, 16, 232),
-            text_color=QColor(240, 240, 240),
-            border_color=QColor(120, 165, 230, 90),
+            bg_color=bg,
+            text_color=text,
+            border_color=border,
             radius=6,
             margins=(12, 6, 12, 6),
             alignment=Qt.AlignLeft | Qt.AlignVCenter,
@@ -586,7 +658,10 @@ class TranslationBox(QWidget):
         self._apply_button_style(self._btn_subtitle, active=self._subtitle_mode != self.OVERLAY_OFF)
 
     def _update_pin_button(self):
-        self._btn_pin.setText("钉")
+        icon_size = int(self._skin.get('button_icon_size_toolbar', 14))
+        self._btn_pin.setText("")
+        self._btn_pin.setIcon(self._make_icon(self._draw_pin, active=self._position_locked))
+        self._btn_pin.setIconSize(QSize(icon_size, icon_size))
         self._apply_button_style(self._btn_pin, active=self._position_locked)
 
     def _on_toggle_pin(self):
@@ -632,6 +707,27 @@ class TranslationBox(QWidget):
             self._apply_paragraph_subtitle_style(win)
         if self._subtitle_active:
             self._layout_subtitles()
+
+    def apply_skin(self):
+        """皮肤改变后重新应用所有样式。"""
+        s = self._skin
+        # 按钮
+        for btn in [self._btn_translate, self._btn_pin, self._btn_subtitle,
+                    self._btn_overlay_font_down, self._btn_overlay_font_up, self._btn_overlay_close,
+                    self._btn_hide]:
+            self._apply_button_style(btn)
+        self._apply_button_style(self._btn_close, tone='danger')
+        self._apply_button_style(self._btn_translate, tone='primary')
+        self._update_pin_button()
+        self._update_subtitle_button()
+        # OCR 标签
+        self._ocr_label.setStyleSheet(
+            f"color: {s.get('text_ocr', 'rgba(220,220,220,160)')}; font-size: 10px;"
+        )
+        # 边框重绘
+        self.update()
+        # 覆盖字幕
+        self.refresh_overlay_style()
 
     def _adjust_overlay_font_delta(self, delta: int):
         current = int(self.settings.get("overlay_font_delta", 0))
@@ -746,14 +842,16 @@ class TranslationBox(QWidget):
         self._refresh_toolbar_visibility()
 
     def paintEvent(self, event):
+        s = self._skin
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        painter.fillRect(self.rect(), QColor(0, 0, 0, 4))
-        border_color = (
-            QColor(80, 160, 255, 200)
-            if self.mode == self.MODE_FIXED or self._position_locked
-            else QColor(220, 220, 255, 160)
-        )
+        fill = QColor(*s.get('box_fill', (0, 0, 0, 4)))
+        painter.fillRect(self.rect(), fill)
+        if self.mode == self.MODE_FIXED or self._position_locked:
+            bc = s.get('box_border_fixed', (80, 160, 255, 200))
+        else:
+            bc = s.get('box_border_temp', (220, 220, 255, 160))
+        border_color = QColor(*bc)
         pen = QPen(border_color, 1, Qt.DashLine)
         painter.setPen(pen)
         painter.drawRect(0, 0, self.width() - 1, self.height() - 1)
