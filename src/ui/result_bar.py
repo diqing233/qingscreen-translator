@@ -68,10 +68,8 @@ _BUTTON_RADIUS = 5
 
 # ── Shared neutral button base metrics (applied to all helper styles) ───
 # All non-primary buttons share these metrics for consistent visual rhythm.
-_BTN_H          = _TOOLBAR_BUTTON_H   # 22 px
-_BTN_RADIUS     = _BUTTON_RADIUS      # 5 px
-_BTN_PADDING    = '0 8px'             # horizontal padding
-_BTN_BORDER_PX  = 1                   # border weight in px
+_BTN_RADIUS  = _BUTTON_RADIUS   # 5 px corner radius
+_BTN_PADDING = '0 8px'          # horizontal padding
 
 
 # ── 任务栏最小化代理窗口 ─────────────────────────────────────────
