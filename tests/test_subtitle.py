@@ -386,3 +386,84 @@ def test_close_event_destroys_paragraph_subtitle_wins():
     box.close()
 
     assert box._subtitle_paragraph_wins == []
+
+
+# ── New targeted tests for overlay controls ordering and visibility ────────
+
+
+def test_overlay_controls_full_order_after_subtitle_button():
+    """All overlay controls must appear after the subtitle button in the toolbar layout."""
+    box, _ = _make_box()
+    layout = box._btn_bar.layout()
+
+    idx_subtitle = layout.indexOf(box._btn_subtitle)
+    idx_font_down = layout.indexOf(box._btn_overlay_font_down)
+    idx_font_up = layout.indexOf(box._btn_overlay_font_up)
+    idx_close = layout.indexOf(box._btn_overlay_close)
+
+    # All overlay controls must be present in the layout
+    assert idx_subtitle >= 0
+    assert idx_font_down >= 0
+    assert idx_font_up >= 0
+    assert idx_close >= 0
+
+    # Order: subtitle < font_down < font_up < close
+    assert idx_subtitle < idx_font_down < idx_font_up < idx_close
+
+
+def test_overlay_controls_hidden_when_subtitle_is_off():
+    """Overlay font and close controls must be invisible when overlay mode is off."""
+    box, _ = _make_box(overlay_default_mode='off')
+
+    # These buttons are inside _btn_bar which is only shown on hover.
+    # Use WA_WState_Hidden to check each button's own show/hide state.
+    assert box._btn_overlay_font_down.testAttribute(Qt.WA_WState_Hidden)
+    assert box._btn_overlay_font_up.testAttribute(Qt.WA_WState_Hidden)
+    assert box._btn_overlay_close.testAttribute(Qt.WA_WState_Hidden)
+
+
+def test_overlay_controls_visible_when_subtitle_is_active():
+    """Overlay font and close controls must become visible once an overlay mode is active."""
+    box, _ = _make_box()
+    box.show()
+
+    box.set_overlay_mode('over')
+    _app.processEvents()
+
+    assert not box._btn_overlay_font_down.testAttribute(Qt.WA_WState_Hidden)
+    assert not box._btn_overlay_font_up.testAttribute(Qt.WA_WState_Hidden)
+    assert not box._btn_overlay_close.testAttribute(Qt.WA_WState_Hidden)
+
+
+def test_overlay_controls_hidden_again_when_overlay_turned_off():
+    """Toggling overlay mode back to off must hide the overlay controls."""
+    box, _ = _make_box()
+    box.show()
+
+    box.set_overlay_mode('below')
+    _app.processEvents()
+    assert not box._btn_overlay_font_down.testAttribute(Qt.WA_WState_Hidden)
+
+    box.set_overlay_mode('off')
+    _app.processEvents()
+
+    assert box._btn_overlay_font_down.testAttribute(Qt.WA_WState_Hidden)
+    assert box._btn_overlay_font_up.testAttribute(Qt.WA_WState_Hidden)
+    assert box._btn_overlay_close.testAttribute(Qt.WA_WState_Hidden)
+
+
+def test_translate_and_pin_buttons_precede_subtitle_in_toolbar():
+    """The translate and pin buttons must appear before the subtitle button."""
+    box, _ = _make_box()
+    layout = box._btn_bar.layout()
+
+    idx_translate = layout.indexOf(box._btn_translate)
+    idx_pin = layout.indexOf(box._btn_pin)
+    idx_subtitle = layout.indexOf(box._btn_subtitle)
+
+    assert idx_translate >= 0
+    assert idx_pin >= 0
+    assert idx_subtitle >= 0
+
+    assert idx_translate < idx_subtitle
+    assert idx_pin < idx_subtitle

@@ -441,3 +441,91 @@ def test_result_bar_uses_custom_copy_and_broom_icons_for_each_variant(variant):
     assert not bar._btn_copy_src.icon().isNull()
     assert '📋' not in bar._btn_copy_src.text()
     assert not bar._btn_stop_clear.icon().isNull()
+
+
+# ── New targeted tests for button polish behavior ─────────────────────────
+
+
+def test_action_row_layout_index_order_is_source_copysrc_retranslate_ai():
+    """Action buttons must sit in the HBoxLayout in the canonical order."""
+    bar = _make_bar()
+    bar.show_result(_result())
+    _app.processEvents()
+
+    ar = bar._details_actions_widget.layout()
+    idx_source = ar.indexOf(bar._btn_source)
+    idx_copy_src = ar.indexOf(bar._btn_copy_src)
+    idx_retranslate = ar.indexOf(bar._btn_retranslate)
+    idx_ai = ar.indexOf(bar._btn_ai)
+
+    # All buttons must be present in the layout
+    assert idx_source >= 0
+    assert idx_copy_src >= 0
+    assert idx_retranslate >= 0
+    assert idx_ai >= 0
+
+    # Order must be preserved by layout index
+    assert idx_source < idx_copy_src < idx_retranslate < idx_ai
+
+
+def test_source_expansion_does_not_shrink_translation_block():
+    """Expanding the source panel must not reduce the translation panel height."""
+    bar = _make_bar()
+    bar.show_result(_result())
+    _app.processEvents()
+
+    before_height = bar._translation_panel.height()
+    before_bar_y = bar.y()
+
+    bar._toggle_source()
+    _app.processEvents()
+
+    # The bar may grow downward, but the translation panel must not shrink
+    assert bar._translation_panel.height() >= before_height - 4  # allow tiny rounding
+    # The top edge of the bar must not move (growth is downward only)
+    assert bar.y() == before_bar_y
+    # The source panel is now visible below the translation panel
+    assert bar._source_panel.isVisible()
+    trans_bottom = bar._translation_panel.mapTo(bar._body, bar._translation_panel.rect().bottomLeft()).y()
+    src_top = bar._source_panel.mapTo(bar._body, bar._source_panel.rect().topLeft()).y()
+    assert src_top >= trans_bottom - 2
+
+
+def test_ai_split_button_left_region_emits_left_clicked():
+    """Clicking in the left zone must emit left_clicked, not right_clicked."""
+    bar = _make_bar()
+    left_hits = []
+    right_hits = []
+    bar._btn_ai.left_clicked.connect(lambda: left_hits.append(1))
+    bar._btn_ai.right_clicked.connect(lambda: right_hits.append(1))
+
+    ev = MagicMock()
+    ev.button.return_value = Qt.LeftButton
+    ev.x.return_value = 1  # well inside the left zone
+
+    bar._btn_ai.mousePressEvent(ev)
+
+    assert left_hits == [1]
+    assert right_hits == []
+
+
+def test_ai_split_button_right_region_emits_right_clicked():
+    """Clicking in the right zone must emit right_clicked, not left_clicked."""
+    bar = _make_bar()
+    left_hits = []
+    right_hits = []
+    bar._btn_ai.left_clicked.connect(lambda: left_hits.append(1))
+    bar._btn_ai.right_clicked.connect(lambda: right_hits.append(1))
+
+    # Force a known width so the divider is deterministic
+    bar._btn_ai.setFixedWidth(80)
+    _app.processEvents()
+
+    ev = MagicMock()
+    ev.button.return_value = Qt.LeftButton
+    ev.x.return_value = bar._btn_ai.width() - 1  # right zone
+
+    bar._btn_ai.mousePressEvent(ev)
+
+    assert left_hits == []
+    assert right_hits == [1]
