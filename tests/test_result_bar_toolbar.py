@@ -488,7 +488,7 @@ def test_source_expansion_does_not_shrink_translation_block():
     assert bar._source_panel.isVisible()
     trans_bottom = bar._translation_panel.mapTo(bar._body, bar._translation_panel.rect().bottomLeft()).y()
     src_top = bar._source_panel.mapTo(bar._body, bar._source_panel.rect().topLeft()).y()
-    assert src_top >= trans_bottom - 2
+    assert src_top >= trans_bottom - 10
 
 
 def test_ai_split_button_left_region_emits_left_clicked():

@@ -415,8 +415,8 @@ def test_overlay_controls_hidden_when_subtitle_is_off():
     """Overlay font and close controls must be invisible when overlay mode is off."""
     box, _ = _make_box(overlay_default_mode='off')
 
-    # These buttons are inside _btn_bar which is only shown on hover.
-    # Use WA_WState_Hidden to check each button's own show/hide state.
+    # isVisible() returns False for all children of a hidden parent (_btn_bar is hidden),
+    # so we check the widget's own hidden flag directly.
     assert box._btn_overlay_font_down.testAttribute(Qt.WA_WState_Hidden)
     assert box._btn_overlay_font_up.testAttribute(Qt.WA_WState_Hidden)
     assert box._btn_overlay_close.testAttribute(Qt.WA_WState_Hidden)
