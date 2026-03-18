@@ -142,3 +142,30 @@ def test_settings_window_reset_defaults_restores_calm_button_style_variant():
 
     assert buttons['calm'].isChecked()
     assert not buttons['semantic'].isChecked()
+
+
+def test_settings_window_skin_selector_contains_all_13_skins():
+    """皮肤选择器必须包含 list_skins() 返回的全部 13 个皮肤 ID。"""
+    import sys, os
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+    from ui.settings_window import SettingsWindow
+    from ui.theme import list_skins
+
+    f = tempfile.NamedTemporaryFile(suffix='.json', delete=False)
+    f.close()
+    store = SettingsStore(f.name)
+    win = SettingsWindow(store)
+
+    expected = set(list_skins())
+    actual = set(win._skin_cards.keys())
+    assert actual == expected, f"缺少皮肤: {expected - actual}, 多余皮肤: {actual - expected}"
+
+
+def test_skin_kawaii_persists():
+    """保存 skin='kawaii' 后重新加载应返回 'kawaii'。"""
+    f = tempfile.NamedTemporaryFile(suffix='.json', delete=False)
+    f.close()
+    store = SettingsStore(f.name)
+    store.set('skin', 'kawaii')
+    store2 = SettingsStore(f.name)
+    assert store2.get('skin') == 'kawaii'
