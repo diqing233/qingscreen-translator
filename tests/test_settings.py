@@ -1,7 +1,10 @@
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 import json, tempfile, pytest
+from PyQt5.QtWidgets import QApplication
 from core.settings import SettingsStore
+
+_app = QApplication.instance() or QApplication(sys.argv)
 
 def make_store():
     f = tempfile.NamedTemporaryFile(suffix='.json', delete=False)
@@ -71,3 +74,71 @@ def test_para_split_defaults():
     s = SettingsStore(f.name)
     assert s.get('para_split_enabled') is True
     assert s.get('para_gap_ratio') == 0.5
+
+def test_default_button_style_variant_is_calm():
+    store = make_store()
+    assert store.get('button_style_variant') == 'calm'
+
+def test_button_style_variant_persists():
+    f = tempfile.NamedTemporaryFile(suffix='.json', delete=False)
+    f.close()
+    store = SettingsStore(f.name)
+    store.set('button_style_variant', 'semantic')
+    store2 = SettingsStore(f.name)
+    assert store2.get('button_style_variant') == 'semantic'
+
+
+def get_button_style_variant_buttons(win):
+    buttons = getattr(win, '_button_style_variant_buttons', None)
+    assert buttons is not None
+    assert set(buttons.keys()) == {'calm', 'semantic'}
+    return buttons
+
+
+def test_settings_window_loads_saved_button_style_variant():
+    from ui.settings_window import SettingsWindow
+
+    f = tempfile.NamedTemporaryFile(suffix='.json', delete=False)
+    f.close()
+    store = SettingsStore(f.name)
+    store.set('button_style_variant', 'semantic')
+
+    win = SettingsWindow(store)
+    buttons = get_button_style_variant_buttons(win)
+
+    assert buttons['semantic'].isChecked()
+    assert not buttons['calm'].isChecked()
+
+
+def test_settings_window_saves_button_style_variant():
+    from ui.settings_window import SettingsWindow
+
+    f = tempfile.NamedTemporaryFile(suffix='.json', delete=False)
+    f.close()
+    store = SettingsStore(f.name)
+
+    win = SettingsWindow(store)
+    buttons = get_button_style_variant_buttons(win)
+    buttons['semantic'].setChecked(True)
+    win._save()
+
+    reloaded = SettingsStore(f.name)
+    assert reloaded.get('button_style_variant') == 'semantic'
+
+
+def test_settings_window_reset_defaults_restores_calm_button_style_variant():
+    from ui.settings_window import SettingsWindow
+
+    f = tempfile.NamedTemporaryFile(suffix='.json', delete=False)
+    f.close()
+    store = SettingsStore(f.name)
+    store.set('button_style_variant', 'semantic')
+
+    win = SettingsWindow(store)
+    buttons = get_button_style_variant_buttons(win)
+    assert buttons['semantic'].isChecked()
+
+    win._reset_defaults()
+
+    assert buttons['calm'].isChecked()
+    assert not buttons['semantic'].isChecked()
