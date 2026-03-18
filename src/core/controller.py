@@ -603,9 +603,11 @@ class CoreController(QObject):
             self._settings_win.settings_saved.connect(self.router.reload)
             self._settings_win.settings_saved.connect(self.result_bar.refresh_opacity)
             self._settings_win.settings_saved.connect(self.result_bar.apply_settings)
+            self._settings_win.settings_saved.connect(self.result_bar.apply_skin)
             self._settings_win.settings_saved.connect(self._reload_hotkeys)
             self._settings_win.settings_saved.connect(self._refresh_overlay_font_styles)
             self._settings_win.settings_saved.connect(self.result_bar.sync_para_mode_from_settings)
+            self._settings_win.settings_saved.connect(self._apply_skin_to_boxes)
             self._settings_win.show()
         else:
             self._settings_win.activateWindow()
@@ -631,6 +633,13 @@ class CoreController(QObject):
         for box in boxes:
             if hasattr(box, 'refresh_overlay_style'):
                 box.refresh_overlay_style()
+
+    def _apply_skin_to_boxes(self):
+        """皮肤改变后更新所有翻译框样式。"""
+        boxes = getattr(self.box_manager, '_boxes', {}).values()
+        for box in boxes:
+            if hasattr(box, 'apply_skin'):
+                box.apply_skin()
 
     def _trigger_explain(self):
         text = ''
