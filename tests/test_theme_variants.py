@@ -122,3 +122,15 @@ def test_ink_in_list_skins():
 
 def test_mint_in_list_skins():
     assert 'mint' in theme.list_skins()
+
+
+def test_kawaii_skin_exists_and_has_correct_tokens():
+    skin = theme.get_skin('kawaii')
+
+    assert skin['dark'] == False
+    assert skin['bg_rgb'] == (255, 245, 248)
+    assert skin['radius'] == 16
+
+
+def test_kawaii_in_list_skins():
+    assert 'kawaii' in theme.list_skins()
