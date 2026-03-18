@@ -49,15 +49,16 @@ Five named font sets bundled as `.ttf` files under `assets/fonts/`:
 | `serif` | Noto Serif SC | — (native CJK) | Literary, organic |
 | `display` | Orbitron | Noto Sans SC | Futuristic, sci-fi |
 
-### Font Set Tokens (per set, ~6 tokens)
+### Font Set Tokens (per set, 6 tokens)
 
 ```python
 {
-    'font_family': str,           # CSS font-family string with fallbacks
-    'font_size_translation': int, # main translation label (px)
-    'font_size_ui': int,          # general UI text (px)
-    'font_size_small': int,       # secondary/muted labels (px)
-    'font_weight_translation': int, # 400 or 500
+    'font_family': str,             # CSS font-family string with fallbacks
+    'font_size_translation': int,   # main translation label (px)
+    'font_size_ui': int,            # general UI text (px)
+    'font_size_small': int,         # secondary/muted labels (px)
+    'font_weight_translation': int, # translation text weight: 400 or 500
+    'font_weight_ui': int,          # UI button/label weight: 400 or 600
 }
 ```
 
@@ -75,11 +76,13 @@ Five named font sets bundled as `.ttf` files under `assets/fonts/`:
 
 Phosphor Icons font, three weight variants:
 
-| Key | Weight | Skins |
-|-----|--------|-------|
-| `phosphor-light` | light | 国风水墨, 极简商务 |
-| `phosphor-regular` | regular | 深空暗夜, 霜雾玻璃, 玫瑰晶, 御剑蓝, 珊瑚暖阳, 薄荷清风, 清纯校园, 可爱动物, 北欧森林 |
-| `phosphor-bold` | bold | 黑客矩阵, 复古琥珀, 赛博朋克 |
+| Key | Weight | Font Family Name | Skins |
+|-----|--------|-----------------|-------|
+| `phosphor-light` | light | `"Phosphor Light"` | 国风水墨, 极简商务 |
+| `phosphor-regular` | regular | `"Phosphor"` | 深空暗夜, 霜雾玻璃, 玫瑰晶, 御剑蓝, 珊瑚暖阳, 薄荷清风, 清纯校园, 可爱动物, 北欧森林 |
+| `phosphor-bold` | bold | `"Phosphor Bold"` | 黑客矩阵, 复古琥珀, 赛博朋克 |
+
+Each weight is a separate `.ttf` file registered as a distinct font family via `QFontDatabase.addApplicationFont()`. `QFont("Phosphor Light")` constructs the light variant; no weight parameter needed.
 
 ### Icon Set Tokens
 
@@ -98,8 +101,8 @@ Phosphor Icons font, three weight variants:
     'icon_unpin': str,
     'icon_expand': str,
     'icon_collapse': str,
-    'icon_font_up': str,
-    'icon_font_down': str,
+    'icon_font_up': str,    # existing A+ button (result_bar.py:553) → Phosphor text-increase icon
+    'icon_font_down': str,  # existing A- button (result_bar.py:549) → Phosphor text-decrease icon
     'icon_settings': str,
     'icon_history': str,
 }
@@ -119,7 +122,11 @@ Light mode skin with sky-blue + white + warm-yellow palette.
     'radius': 8,
     'default_font_set': 'sans',
     'default_icon_set': 'phosphor-regular',
-    # ... full 63-token color set (sky blue #5090f0, warm yellow #ffb43c)
+    # Full 63-token color set follows the same structure as existing light-mode skins
+    # (e.g. coral, mint). Primary accent: #5090f0 (sky blue), secondary: #ffb43c (warm yellow).
+    # Implementation: copy coral skin token-for-token, substitute blue/yellow for orange/amber.
+    # This is a mechanical color substitution — no design decisions required.
+    # All 63 token names and their roles are identical to coral; only the rgba values change.
     'swatch': ('#f0f8ff', '#5090f0', '#ffb43c'),
 }
 ```
@@ -175,10 +182,10 @@ assets/fonts/
 | `src/main.py` | Register all font files via `QFontDatabase.addApplicationFont()` at startup |
 | `src/core/settings.py` | Add `font_set: null`, `icon_set: null` to DEFAULTS |
 | `src/ui/settings_window.py` | Add Font + Icons group boxes to Appearance tab |
-| `src/ui/result_bar.py` | Consume `font_family`/`font_size_translation` tokens; migrate QPainter icons to Phosphor font text |
-| `src/ui/translation_box.py` | Same font/icon token consumption |
+| `src/ui/result_bar.py` | Consume `font_family`/`font_size_translation` tokens; migrate QPainter icon methods (`_draw_copy`, `_draw_close`, etc.) to Phosphor font text — existing `_draw_*` methods are deleted, not kept as fallback |
+| `src/ui/translation_box.py` | Same font token consumption; same QPainter icon migration strategy |
 
 ## Testing
 
-- Existing 164 tests: no changes required
+- Existing 164 tests: no changes required. The `_draw_*` methods (`_draw_copy`, `_draw_close`, etc.) are private QPainter helpers with no direct test coverage (confirmed: `grep -r "_draw_" tests/` returns no matches). Tests cover widget behavior, not drawing implementation details.
 - New tests (~10): font set composition, icon set composition, campus skin token completeness, settings serialization for font_set/icon_set, font registration at startup
