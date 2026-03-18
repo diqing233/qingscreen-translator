@@ -1,0 +1,489 @@
+"""皮肤/主题系统
+
+每个皮肤是一个 dict，包含所有 UI 组件所需的颜色 token。
+通过 get_skin(name) 获取皮肤，通过 list_skins() 列举全部皮肤。
+"""
+
+# ── 皮肤定义 ──────────────────────────────────────────────────────
+
+SKINS = {
+    # 1. 深空暗夜：当前默认，深邃海军蓝 ─────────────────────────
+    'deep_space': {
+        'name': '深空暗夜',
+        'description': '深邃夜空，专注沉浸',
+        'dark': True,
+        # 主容器
+        'bg_rgb': (18, 18, 24),
+        'border': 'rgba(255,255,255,25)',
+        'radius': 10,
+        # 文字
+        'text': '#e0e4ef',
+        'text_muted': 'rgba(185,192,215,220)',
+        'text_ocr': 'rgba(220,220,220,160)',
+        # 普通按钮
+        'btn_bg': 'rgba(56,58,74,200)',
+        'btn_border': 'rgba(255,255,255,32)',
+        'btn_fg': 'rgba(228,232,245,242)',
+        'btn_hover': 'rgba(70,74,92,218)',
+        'btn_disabled_bg': 'rgba(36,38,48,120)',
+        'btn_disabled_fg': 'rgba(140,144,160,130)',
+        # 激活态按钮
+        'btn_active_bg': 'rgba(74,78,98,198)',
+        'btn_active_border': 'rgba(142,165,220,72)',
+        'btn_active_fg': 'rgba(240,242,248,236)',
+        'btn_active_hover': 'rgba(86,92,114,214)',
+        # 主要动作按钮（翻译 / 框选）
+        'btn_primary_bg': 'rgba(82,132,236,216)',
+        'btn_primary_border': 'rgba(134,176,255,180)',
+        'btn_primary_hover': 'rgba(98,150,248,230)',
+        # 危险按钮（关闭）
+        'btn_danger_bg': 'rgba(168,82,56,198)',
+        'btn_danger_border': 'rgba(236,164,134,120)',
+        'btn_danger_hover': 'rgba(196,94,64,218)',
+        # 停止/忙碌按钮
+        'btn_stop_bg': 'rgba(182,84,54,198)',
+        'btn_stop_border': 'rgba(246,169,138,130)',
+        'btn_stop_hover': 'rgba(210,96,62,220)',
+        # 模式按钮（活跃态）
+        'btn_mode_active_bg': 'rgba(80,140,255,204)',
+        'btn_mode_active_border': 'rgba(128,176,255,184)',
+        'btn_mode_active_hover': 'rgba(98,156,255,220)',
+        # 翻译框边框（RGBA 4 元组，用于 QColor）
+        'box_border_temp': (220, 220, 255, 160),
+        'box_border_fixed': (80, 160, 255, 200),
+        'box_fill': (0, 0, 0, 4),
+        # 覆盖字幕（原文上方）
+        'overlay_bg': (6, 10, 16, 244),
+        'overlay_text': '#f0f8ff',
+        'overlay_border': (150, 190, 235, 110),
+        # 覆盖字幕（原文下方）
+        'overlay_below_bg': (6, 10, 16, 232),
+        'overlay_below_text': '#f0f0f0',
+        'overlay_below_border': (120, 165, 230, 90),
+        # TranslateToggle 控件
+        'toggle_track': (29, 31, 41, 228),
+        'toggle_track_border': (255, 255, 255, 28),
+        'toggle_manual': (82, 132, 236, 224),
+        'toggle_auto': (78, 170, 103, 224),
+        # _SplitButton 自定义绘制
+        'split_bg': (58, 60, 74, 192),
+        'split_border': (255, 255, 255, 20),
+        'split_active_bg': (74, 78, 98, 194),
+        'split_active_border': (142, 165, 220, 72),
+        'split_text': (236, 239, 247, 236),
+        # 右键菜单
+        'menu_bg': 'rgba(22,22,32,240)',
+        'menu_text': 'rgba(200,200,215,230)',
+        'menu_border': 'rgba(255,255,255,30)',
+        'menu_selected': 'rgba(80,130,255,180)',
+        'menu_checked': 'rgba(120,200,255,255)',
+        # 滚动条 / 分隔线
+        'scrollbar_bg': 'rgba(255,255,255,8)',
+        'scrollbar_handle': 'rgba(255,255,255,50)',
+        'sep_color': 'rgba(255,255,255,18)',
+        # 原文编辑框
+        'source_editor_bg': 'rgba(255,255,255,6)',
+        'source_editor_border': 'rgba(255,255,255,18)',
+        'source_editor_text': 'rgba(225,225,235,230)',
+        # AI 科普区
+        'explain_bg': 'rgba(255,255,200,8)',
+        'explain_text': 'rgba(245,240,200,220)',
+        # 预览色块（设置界面皮肤选择卡片用）
+        'swatch': ('#121218', '#5284ec', '#4eaa67'),
+    },
+
+    # 2. 霜雾玻璃：半透明浅色毛玻璃 ───────────────────────────────
+    'frosted': {
+        'name': '霜雾玻璃',
+        'description': '通透清凉，毛玻璃质感',
+        'dark': False,
+        'bg_rgb': (220, 228, 248),
+        'border': 'rgba(80,120,220,60)',
+        'radius': 12,
+        'text': '#1a2050',
+        'text_muted': 'rgba(90,110,195,215)',
+        'text_ocr': 'rgba(40,60,140,160)',
+        'btn_bg': 'rgba(180,195,240,180)',
+        'btn_border': 'rgba(80,120,220,60)',
+        'btn_fg': 'rgba(20,40,120,220)',
+        'btn_hover': 'rgba(160,180,235,210)',
+        'btn_disabled_bg': 'rgba(180,195,240,90)',
+        'btn_disabled_fg': 'rgba(100,120,180,120)',
+        'btn_active_bg': 'rgba(100,140,240,180)',
+        'btn_active_border': 'rgba(60,100,230,120)',
+        'btn_active_fg': 'rgba(255,255,255,240)',
+        'btn_active_hover': 'rgba(80,130,245,200)',
+        'btn_primary_bg': 'rgba(60,100,240,200)',
+        'btn_primary_border': 'rgba(40,80,220,180)',
+        'btn_primary_hover': 'rgba(40,80,255,220)',
+        'btn_danger_bg': 'rgba(220,60,80,180)',
+        'btn_danger_border': 'rgba(200,80,100,120)',
+        'btn_danger_hover': 'rgba(240,40,70,200)',
+        'btn_stop_bg': 'rgba(220,60,80,180)',
+        'btn_stop_border': 'rgba(200,80,100,120)',
+        'btn_stop_hover': 'rgba(240,40,70,200)',
+        'btn_mode_active_bg': 'rgba(60,100,240,200)',
+        'btn_mode_active_border': 'rgba(40,80,220,150)',
+        'btn_mode_active_hover': 'rgba(40,80,255,220)',
+        'box_border_temp': (80, 120, 220, 140),
+        'box_border_fixed': (40, 80, 220, 200),
+        'box_fill': (200, 220, 255, 12),
+        'overlay_bg': (220, 230, 255, 220),
+        'overlay_text': '#1a2050',
+        'overlay_border': (80, 120, 220, 120),
+        'overlay_below_bg': (210, 220, 250, 215),
+        'overlay_below_text': '#1a2050',
+        'overlay_below_border': (80, 120, 220, 90),
+        'toggle_track': (180, 195, 240, 220),
+        'toggle_track_border': (80, 120, 220, 60),
+        'toggle_manual': (60, 100, 240, 220),
+        'toggle_auto': (40, 180, 100, 220),
+        'split_bg': (180, 195, 240, 200),
+        'split_border': (80, 120, 220, 60),
+        'split_active_bg': (100, 140, 240, 200),
+        'split_active_border': (60, 100, 230, 120),
+        'split_text': (20, 40, 120, 230),
+        'menu_bg': 'rgba(210,220,250,240)',
+        'menu_text': 'rgba(20,40,120,230)',
+        'menu_border': 'rgba(80,120,220,80)',
+        'menu_selected': 'rgba(60,100,240,180)',
+        'menu_checked': 'rgba(20,80,220,255)',
+        'scrollbar_bg': 'rgba(80,120,220,15)',
+        'scrollbar_handle': 'rgba(80,120,220,60)',
+        'sep_color': 'rgba(80,120,220,40)',
+        'source_editor_bg': 'rgba(80,120,220,12)',
+        'source_editor_border': 'rgba(80,120,220,60)',
+        'source_editor_text': 'rgba(20,40,120,220)',
+        'explain_bg': 'rgba(60,100,240,8)',
+        'explain_text': 'rgba(20,60,180,220)',
+        'swatch': ('#dce4f8', '#3c64f0', '#28b464'),
+    },
+
+    # 3. 黑客矩阵：终端绿 ────────────────────────────────────────
+    'matrix': {
+        'name': '黑客矩阵',
+        'description': '代码雨幕，数字世界',
+        'dark': True,
+        'bg_rgb': (0, 12, 4),
+        'border': 'rgba(0,220,60,50)',
+        'radius': 4,
+        'text': '#00e040',
+        'text_muted': 'rgba(0,190,90,220)',
+        'text_ocr': 'rgba(0,200,60,160)',
+        'btn_bg': 'rgba(0,36,12,200)',
+        'btn_border': 'rgba(0,180,50,40)',
+        'btn_fg': 'rgba(0,220,60,220)',
+        'btn_hover': 'rgba(0,54,18,220)',
+        'btn_disabled_bg': 'rgba(0,20,6,100)',
+        'btn_disabled_fg': 'rgba(0,120,30,100)',
+        'btn_active_bg': 'rgba(0,80,24,200)',
+        'btn_active_border': 'rgba(0,200,60,80)',
+        'btn_active_fg': 'rgba(0,255,80,240)',
+        'btn_active_hover': 'rgba(0,100,30,220)',
+        'btn_primary_bg': 'rgba(0,160,50,200)',
+        'btn_primary_border': 'rgba(0,220,60,150)',
+        'btn_primary_hover': 'rgba(0,200,60,220)',
+        'btn_danger_bg': 'rgba(160,0,40,180)',
+        'btn_danger_border': 'rgba(220,0,60,100)',
+        'btn_danger_hover': 'rgba(200,0,50,200)',
+        'btn_stop_bg': 'rgba(160,0,40,180)',
+        'btn_stop_border': 'rgba(220,0,60,100)',
+        'btn_stop_hover': 'rgba(200,0,50,200)',
+        'btn_mode_active_bg': 'rgba(0,160,50,200)',
+        'btn_mode_active_border': 'rgba(0,220,60,150)',
+        'btn_mode_active_hover': 'rgba(0,200,60,220)',
+        'box_border_temp': (0, 200, 60, 150),
+        'box_border_fixed': (0, 255, 80, 200),
+        'box_fill': (0, 20, 4, 4),
+        'overlay_bg': (0, 10, 3, 244),
+        'overlay_text': '#00ff41',
+        'overlay_border': (0, 200, 60, 110),
+        'overlay_below_bg': (0, 10, 3, 232),
+        'overlay_below_text': '#00e040',
+        'overlay_below_border': (0, 180, 50, 90),
+        'toggle_track': (0, 20, 6, 228),
+        'toggle_track_border': (0, 180, 50, 40),
+        'toggle_manual': (0, 160, 50, 220),
+        'toggle_auto': (0, 220, 60, 220),
+        'split_bg': (0, 30, 10, 200),
+        'split_border': (0, 180, 50, 40),
+        'split_active_bg': (0, 70, 20, 200),
+        'split_active_border': (0, 200, 60, 80),
+        'split_text': (0, 220, 60, 236),
+        'menu_bg': 'rgba(0,16,5,240)',
+        'menu_text': 'rgba(0,200,60,230)',
+        'menu_border': 'rgba(0,180,50,50)',
+        'menu_selected': 'rgba(0,160,50,180)',
+        'menu_checked': 'rgba(0,255,80,255)',
+        'scrollbar_bg': 'rgba(0,180,50,8)',
+        'scrollbar_handle': 'rgba(0,180,50,50)',
+        'sep_color': 'rgba(0,180,50,30)',
+        'source_editor_bg': 'rgba(0,40,12,200)',
+        'source_editor_border': 'rgba(0,180,50,40)',
+        'source_editor_text': 'rgba(0,220,60,220)',
+        'explain_bg': 'rgba(0,40,12,200)',
+        'explain_text': 'rgba(0,220,60,210)',
+        'swatch': ('#000c04', '#00c83c', '#00ff51'),
+    },
+
+    # 4. 玫瑰晶：暗夜玫瑰 ────────────────────────────────────────
+    'rose': {
+        'name': '玫瑰晶',
+        'description': '暗夜玫瑰，优雅魅惑',
+        'dark': True,
+        'bg_rgb': (24, 14, 22),
+        'border': 'rgba(220,100,180,50)',
+        'radius': 10,
+        'text': '#f0d0e8',
+        'text_muted': 'rgba(196,140,180,215)',
+        'text_ocr': 'rgba(240,180,220,160)',
+        'btn_bg': 'rgba(54,28,48,190)',
+        'btn_border': 'rgba(220,100,180,30)',
+        'btn_fg': 'rgba(240,200,230,220)',
+        'btn_hover': 'rgba(72,36,64,210)',
+        'btn_disabled_bg': 'rgba(36,18,32,120)',
+        'btn_disabled_fg': 'rgba(160,100,140,100)',
+        'btn_active_bg': 'rgba(100,40,80,200)',
+        'btn_active_border': 'rgba(220,100,180,80)',
+        'btn_active_fg': 'rgba(255,220,245,236)',
+        'btn_active_hover': 'rgba(120,50,100,220)',
+        'btn_primary_bg': 'rgba(196,60,160,200)',
+        'btn_primary_border': 'rgba(240,120,200,150)',
+        'btn_primary_hover': 'rgba(220,80,180,220)',
+        'btn_danger_bg': 'rgba(160,40,60,190)',
+        'btn_danger_border': 'rgba(230,100,130,100)',
+        'btn_danger_hover': 'rgba(190,50,70,210)',
+        'btn_stop_bg': 'rgba(160,40,60,190)',
+        'btn_stop_border': 'rgba(230,100,130,100)',
+        'btn_stop_hover': 'rgba(190,50,70,210)',
+        'btn_mode_active_bg': 'rgba(196,60,160,200)',
+        'btn_mode_active_border': 'rgba(240,120,200,150)',
+        'btn_mode_active_hover': 'rgba(220,80,180,220)',
+        'box_border_temp': (220, 140, 200, 150),
+        'box_border_fixed': (220, 80, 180, 200),
+        'box_fill': (20, 0, 16, 4),
+        'overlay_bg': (20, 8, 18, 244),
+        'overlay_text': '#ffd0f0',
+        'overlay_border': (220, 120, 190, 110),
+        'overlay_below_bg': (20, 8, 18, 232),
+        'overlay_below_text': '#f0c0e0',
+        'overlay_below_border': (200, 100, 170, 90),
+        'toggle_track': (34, 18, 30, 228),
+        'toggle_track_border': (220, 100, 180, 30),
+        'toggle_manual': (196, 60, 160, 220),
+        'toggle_auto': (180, 80, 220, 220),
+        'split_bg': (54, 28, 48, 192),
+        'split_border': (220, 100, 180, 30),
+        'split_active_bg': (100, 40, 80, 200),
+        'split_active_border': (220, 100, 180, 80),
+        'split_text': (240, 200, 230, 236),
+        'menu_bg': 'rgba(28,14,26,240)',
+        'menu_text': 'rgba(240,200,230,230)',
+        'menu_border': 'rgba(220,100,180,40)',
+        'menu_selected': 'rgba(180,60,150,180)',
+        'menu_checked': 'rgba(255,160,230,255)',
+        'scrollbar_bg': 'rgba(220,100,180,8)',
+        'scrollbar_handle': 'rgba(220,100,180,50)',
+        'sep_color': 'rgba(220,100,180,30)',
+        'source_editor_bg': 'rgba(60,28,54,200)',
+        'source_editor_border': 'rgba(220,100,180,30)',
+        'source_editor_text': 'rgba(240,200,230,220)',
+        'explain_bg': 'rgba(60,28,54,200)',
+        'explain_text': 'rgba(255,200,240,210)',
+        'swatch': ('#180e16', '#c43ca0', '#b450dc'),
+    },
+
+    # 5. 御剑蓝：星辰大海 ────────────────────────────────────────
+    'ocean': {
+        'name': '御剑蓝',
+        'description': '星辰大海，沉稳致远',
+        'dark': True,
+        'bg_rgb': (8, 14, 32),
+        'border': 'rgba(40,120,255,60)',
+        'radius': 8,
+        'text': '#c8d8f8',
+        'text_muted': 'rgba(140,175,235,215)',
+        'text_ocr': 'rgba(180,210,255,160)',
+        'btn_bg': 'rgba(18,28,60,190)',
+        'btn_border': 'rgba(40,120,255,30)',
+        'btn_fg': 'rgba(180,210,255,220)',
+        'btn_hover': 'rgba(28,42,80,210)',
+        'btn_disabled_bg': 'rgba(10,18,40,120)',
+        'btn_disabled_fg': 'rgba(80,110,160,100)',
+        'btn_active_bg': 'rgba(30,60,120,200)',
+        'btn_active_border': 'rgba(60,140,255,80)',
+        'btn_active_fg': 'rgba(200,230,255,236)',
+        'btn_active_hover': 'rgba(40,80,150,220)',
+        'btn_primary_bg': 'rgba(20,100,255,200)',
+        'btn_primary_border': 'rgba(60,160,255,160)',
+        'btn_primary_hover': 'rgba(40,120,255,220)',
+        'btn_danger_bg': 'rgba(160,40,60,190)',
+        'btn_danger_border': 'rgba(230,100,130,100)',
+        'btn_danger_hover': 'rgba(190,50,70,210)',
+        'btn_stop_bg': 'rgba(160,40,60,190)',
+        'btn_stop_border': 'rgba(230,100,130,100)',
+        'btn_stop_hover': 'rgba(190,50,70,210)',
+        'btn_mode_active_bg': 'rgba(20,100,255,200)',
+        'btn_mode_active_border': 'rgba(60,160,255,160)',
+        'btn_mode_active_hover': 'rgba(40,120,255,220)',
+        'box_border_temp': (100, 160, 255, 150),
+        'box_border_fixed': (40, 120, 255, 200),
+        'box_fill': (0, 8, 24, 4),
+        'overlay_bg': (6, 12, 30, 244),
+        'overlay_text': '#d0e8ff',
+        'overlay_border': (60, 140, 255, 110),
+        'overlay_below_bg': (6, 12, 30, 232),
+        'overlay_below_text': '#c0d8ff',
+        'overlay_below_border': (40, 120, 255, 90),
+        'toggle_track': (14, 22, 50, 228),
+        'toggle_track_border': (40, 120, 255, 30),
+        'toggle_manual': (20, 100, 255, 220),
+        'toggle_auto': (20, 180, 140, 220),
+        'split_bg': (20, 30, 64, 192),
+        'split_border': (40, 120, 255, 30),
+        'split_active_bg': (30, 60, 120, 200),
+        'split_active_border': (60, 140, 255, 80),
+        'split_text': (180, 210, 255, 236),
+        'menu_bg': 'rgba(10,18,40,240)',
+        'menu_text': 'rgba(180,210,255,230)',
+        'menu_border': 'rgba(40,120,255,40)',
+        'menu_selected': 'rgba(20,100,255,180)',
+        'menu_checked': 'rgba(100,180,255,255)',
+        'scrollbar_bg': 'rgba(40,120,255,8)',
+        'scrollbar_handle': 'rgba(40,120,255,50)',
+        'sep_color': 'rgba(40,120,255,30)',
+        'source_editor_bg': 'rgba(14,24,60,200)',
+        'source_editor_border': 'rgba(40,120,255,30)',
+        'source_editor_text': 'rgba(180,210,255,220)',
+        'explain_bg': 'rgba(14,24,60,200)',
+        'explain_text': 'rgba(180,220,255,210)',
+        'swatch': ('#080e20', '#1464ff', '#14b48c'),
+    },
+}
+
+DEFAULT_SKIN = 'deep_space'
+DEFAULT_BUTTON_STYLE_VARIANT = 'calm'
+
+BUTTON_STYLE_VARIANTS = {
+    'calm': {
+        'button_style_variant': 'calm',
+        'button_font_size': 12,
+        'button_font_weight': 600,
+        'button_font_size_compact': 12,
+        'button_font_size_toolbar': 12,
+        'button_font_size_action': 12,
+        'button_icon_family': 'geometric-a',
+        'button_icon_size_toolbar': 14,
+        'button_icon_size_action': 14,
+        'button_icon_stroke': 'rgba(228,232,245,242)',
+        'button_icon_active_stroke': 'rgba(240,242,248,236)',
+    },
+    'semantic': {
+        'button_style_variant': 'semantic',
+        'btn_bg': 'rgba(34,48,78,204)',
+        'btn_border': 'rgba(118,156,224,96)',
+        'btn_fg': 'rgba(236,242,255,242)',
+        'btn_hover': 'rgba(44,64,102,220)',
+        'btn_disabled_bg': 'rgba(26,30,42,118)',
+        'btn_disabled_fg': 'rgba(150,162,188,140)',
+        'btn_active_bg': 'rgba(22,94,110,208)',
+        'btn_active_border': 'rgba(116,212,220,110)',
+        'btn_active_fg': 'rgba(236,251,251,244)',
+        'btn_active_hover': 'rgba(28,112,128,222)',
+        'btn_primary_bg': 'rgba(58,128,242,220)',
+        'btn_primary_border': 'rgba(132,190,255,176)',
+        'btn_primary_hover': 'rgba(78,146,252,232)',
+        'btn_danger_bg': 'rgba(176,82,58,206)',
+        'btn_danger_border': 'rgba(242,172,138,128)',
+        'btn_danger_hover': 'rgba(204,96,66,222)',
+        'btn_stop_bg': 'rgba(176,82,58,206)',
+        'btn_stop_border': 'rgba(242,172,138,128)',
+        'btn_stop_hover': 'rgba(204,96,66,222)',
+        'btn_mode_active_bg': 'rgba(64,132,242,214)',
+        'btn_mode_active_border': 'rgba(132,190,255,180)',
+        'btn_mode_active_hover': 'rgba(82,148,252,228)',
+        'toggle_manual': (72, 138, 246, 226),
+        'toggle_auto': (32, 176, 150, 226),
+        'split_bg': (38, 54, 86, 196),
+        'split_border': (118, 156, 224, 96),
+        'split_active_bg': (24, 104, 120, 202),
+        'split_active_border': (116, 212, 220, 110),
+        'split_text': (236, 251, 251, 242),
+        'button_font_size': 12,
+        'button_font_weight': 600,
+        'button_font_size_compact': 12,
+        'button_font_size_toolbar': 12,
+        'button_font_size_action': 12,
+        'button_icon_family': 'geometric-a',
+        'button_icon_size_toolbar': 14,
+        'button_icon_size_action': 14,
+        'button_icon_stroke': 'rgba(236,242,255,242)',
+        'button_icon_active_stroke': 'rgba(236,251,251,244)',
+    },
+}
+
+
+# ── 公共辅助函数 ──────────────────────────────────────────────────
+
+def get_skin(name: str, button_style_variant: str = DEFAULT_BUTTON_STYLE_VARIANT) -> dict:
+    """Return a composed skin with button-style overrides layered onto the base skin."""
+    skin = dict(SKINS.get(name, SKINS[DEFAULT_SKIN]))
+    variant = BUTTON_STYLE_VARIANTS.get(
+        button_style_variant,
+        BUTTON_STYLE_VARIANTS[DEFAULT_BUTTON_STYLE_VARIANT],
+    )
+    skin.update(variant)
+    return skin
+
+
+def list_skins() -> list:
+    """返回所有皮肤 id 的列表（按定义顺序）。"""
+    return list(SKINS.keys())
+
+
+def make_menu_qss(skin: dict) -> str:
+    """从皮肤 token 生成右键菜单 QSS 字符串。"""
+    return f'''QMenu {{
+    background: {skin['menu_bg']};
+    color: {skin['menu_text']};
+    border: 1px solid {skin['menu_border']};
+    border-radius: 6px;
+    padding: 4px 2px;
+    font-size: 11px;
+}}
+QMenu::item {{ padding: 5px 18px; border-radius: 3px; }}
+QMenu::item:selected {{ background: {skin['menu_selected']}; color: white; }}
+QMenu::item:checked {{ font-weight: bold; color: {skin['menu_checked']}; }}
+'''
+
+
+def make_container_qss(skin: dict, alpha: int) -> str:
+    """从皮肤 token 生成主容器 QSS（alpha 由外部透明度设置控制）。"""
+    r, g, b = skin['bg_rgb']
+    return f'''
+        QWidget#ct {{
+            background: rgba({r},{g},{b},{alpha});
+            border-radius: {skin['radius']}px;
+            border: 1px solid {skin['border']};
+        }}
+    '''
+
+
+def make_scrollbar_qss(skin: dict, orientation: str = 'vertical', size: int = 6) -> str:
+    """生成滚动条 QSS（可嵌入 QTextEdit / QScrollArea 的 setStyleSheet 中）。"""
+    o = orientation  # 'vertical' or 'horizontal'
+    dim = 'width' if o == 'vertical' else 'height'
+    line_dim = 'height' if o == 'vertical' else 'width'
+    min_s = 'min-height' if o == 'vertical' else 'min-width'
+    bg = skin['scrollbar_bg']
+    handle = skin['scrollbar_handle']
+    r = size // 2
+    return f'''
+    QScrollBar:{o} {{
+        background: {bg}; {dim}: {size}px; border-radius: {r}px; margin: 0;
+    }}
+    QScrollBar::handle:{o} {{
+        background: {handle}; border-radius: {r}px; {min_s}: 18px;
+    }}
+    QScrollBar::add-line:{o}, QScrollBar::sub-line:{o} {{ {line_dim}: 0; }}
+    '''
