@@ -2,8 +2,12 @@ from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                              QLineEdit, QSpinBox, QComboBox, QPushButton,
                              QListWidget, QListWidgetItem, QTabWidget,
                              QWidget, QFormLayout, QMessageBox,
-                             QProgressBar, QGroupBox, QCheckBox, QDoubleSpinBox)
+                             QProgressBar, QGroupBox, QCheckBox, QDoubleSpinBox,
+                             QScrollArea, QSizePolicy, QGridLayout, QFrame,
+                             QRadioButton, QButtonGroup)
 from PyQt5.QtCore import pyqtSignal, Qt
+from PyQt5.QtGui import QColor, QPainter, QPen
+from ui.theme import SKINS, list_skins
 
 BACKEND_LABELS = {
     'dictionary':   '📖 本地词典（离线极快）',
@@ -20,6 +24,81 @@ BACKEND_LABELS = {
     'sogou':        '🟠 搜狗翻译（免费，国内直连，暂不可用）',
     'youdao':       '🟡 有道翻译（已封锁非官方调用，暂不可用）',
 }
+
+
+class _SkinCard(QWidget):
+    """皮肤选择卡片：显示皮肤名称、描述和三色预览块，可点击选中。"""
+    clicked = pyqtSignal(str)   # 发送皮肤 ID
+
+    _W, _H = 160, 90
+
+    def __init__(self, skin_id: str, skin: dict, parent=None):
+        super().__init__(parent)
+        self._id = skin_id
+        self._skin = skin
+        self._selected = False
+        self.setFixedSize(self._W, self._H)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setToolTip(skin.get('description', ''))
+
+    def set_selected(self, v: bool):
+        self._selected = v
+        self.update()
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        w, h = self.width(), self.height()
+        r, g, b = self._skin.get('bg_rgb', (20, 20, 28))
+        # 背景
+        p.setBrush(QColor(r, g, b, 230))
+        p.setPen(Qt.NoPen)
+        p.drawRoundedRect(0, 0, w, h, 8, 8)
+        # 选中边框
+        if self._selected:
+            p.setPen(QPen(QColor(80, 200, 120, 220), 2))
+            p.setBrush(Qt.NoBrush)
+            p.drawRoundedRect(1, 1, w - 2, h - 2, 8, 8)
+        else:
+            p.setPen(QPen(QColor(255, 255, 255, 28), 1))
+            p.setBrush(Qt.NoBrush)
+            p.drawRoundedRect(0, 0, w - 1, h - 1, 8, 8)
+        # 三色预览块（左下角横排）
+        swatches = self._skin.get('swatch', ('#222', '#555', '#888'))
+        sw, sh, gap = 20, 12, 4
+        sx = gap
+        sy = h - sh - gap
+        for color in swatches:
+            p.setBrush(QColor(color))
+            p.setPen(Qt.NoPen)
+            p.drawRoundedRect(sx, sy, sw, sh, 3, 3)
+            sx += sw + gap
+        # 皮肤名称
+        text_color = QColor(self._skin.get('text', '#e0e4ef'))
+        p.setPen(text_color)
+        f = p.font()
+        f.setPixelSize(13)
+        f.setBold(True)
+        p.setFont(f)
+        p.drawText(8, 14, self._skin.get('name', self._id))
+        # 描述
+        muted = QColor(self._skin.get('text_muted', '#888898'))
+        p.setPen(muted)
+        f.setPixelSize(10)
+        f.setBold(False)
+        p.setFont(f)
+        p.drawText(8, 30, w - 16, 28, Qt.AlignLeft | Qt.TextWordWrap,
+                   self._skin.get('description', ''))
+        # 选中勾号
+        if self._selected:
+            p.setPen(QPen(QColor(80, 200, 120, 220), 2))
+            check_x, check_y = w - 20, 8
+            p.drawLine(check_x, check_y + 5, check_x + 4, check_y + 9)
+            p.drawLine(check_x + 4, check_y + 9, check_x + 10, check_y + 2)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit(self._id)
 
 
 class SettingsWindow(QDialog):
@@ -44,7 +123,13 @@ class SettingsWindow(QDialog):
 
         # ── 通用 ──────────────────────────────────────────────
         gen = QWidget()
-        form = QFormLayout(gen)
+        gen_layout = QVBoxLayout(gen)
+        gen_layout.setSpacing(8)
+        gen_layout.setContentsMargins(0, 0, 0, 0)
+
+        # 主设置表单
+        form_widget = QWidget()
+        form = QFormLayout(form_widget)
         form.setSpacing(8)
 
         self._spin_timeout = QSpinBox()
@@ -93,36 +178,8 @@ class SettingsWindow(QDialog):
         self._spin_overlay_font_delta.setRange(-12, 24)
         form.addRow('覆盖译文字号微调', self._spin_overlay_font_delta)
 
-        self._edit_hotkey_select = QLineEdit()
-        self._edit_hotkey_select.setPlaceholderText('如：alt+q')
-        form.addRow('框选热键', self._edit_hotkey_select)
-
-        self._edit_hotkey_explain = QLineEdit()
-        self._edit_hotkey_explain.setPlaceholderText('如：alt+e')
-        form.addRow('AI科普热键', self._edit_hotkey_explain)
-
-        self._edit_hotkey_toggle = QLineEdit()
-        self._edit_hotkey_toggle.setPlaceholderText('如：alt+w')
-        form.addRow('显示/隐藏框热键', self._edit_hotkey_toggle)
-
-        self._edit_hotkey_mode_temp = QLineEdit()
-        self._edit_hotkey_mode_temp.setPlaceholderText('如：alt+1')
-        form.addRow('切换临时模式热键', self._edit_hotkey_mode_temp)
-
-        self._edit_hotkey_mode_fixed = QLineEdit()
-        self._edit_hotkey_mode_fixed.setPlaceholderText('如：alt+2')
-        form.addRow('切换固定模式热键', self._edit_hotkey_mode_fixed)
-
-        self._edit_hotkey_mode_multi = QLineEdit()
-        self._edit_hotkey_mode_multi.setPlaceholderText('如：alt+3')
-        form.addRow('切换多框模式热键', self._edit_hotkey_mode_multi)
-
-        self._edit_hotkey_mode_ai = QLineEdit()
-        self._edit_hotkey_mode_ai.setPlaceholderText('如：alt+4')
-        form.addRow('切换AI框选热键', self._edit_hotkey_mode_ai)
-
-        self._para_check = QCheckBox('自动识别段落，分段翻译')
-        form.addRow('', self._para_check)
+        self._para_check = QCheckBox()
+        form.addRow('自动识别段落，分段翻译', self._para_check)
 
         self._para_ratio_spin = QDoubleSpinBox()
         self._para_ratio_spin.setRange(0.1, 3.0)
@@ -135,6 +192,43 @@ class SettingsWindow(QDialog):
         self._para_check.stateChanged.connect(
             lambda state: self._para_ratio_spin.setEnabled(bool(state))
         )
+
+        gen_layout.addWidget(form_widget)
+
+        # 快捷键分组（放在最下方）
+        hotkey_group = QGroupBox('快捷键')
+        hotkey_form = QFormLayout(hotkey_group)
+        hotkey_form.setSpacing(8)
+
+        self._edit_hotkey_select = QLineEdit()
+        self._edit_hotkey_select.setPlaceholderText('如：alt+q')
+        hotkey_form.addRow('框选热键', self._edit_hotkey_select)
+
+        self._edit_hotkey_explain = QLineEdit()
+        self._edit_hotkey_explain.setPlaceholderText('如：alt+e')
+        hotkey_form.addRow('AI科普热键', self._edit_hotkey_explain)
+
+        self._edit_hotkey_toggle = QLineEdit()
+        self._edit_hotkey_toggle.setPlaceholderText('如：alt+w')
+        hotkey_form.addRow('显示/隐藏框热键', self._edit_hotkey_toggle)
+
+        self._edit_hotkey_mode_temp = QLineEdit()
+        self._edit_hotkey_mode_temp.setPlaceholderText('如：alt+1')
+        hotkey_form.addRow('切换临时模式热键', self._edit_hotkey_mode_temp)
+
+        self._edit_hotkey_mode_fixed = QLineEdit()
+        self._edit_hotkey_mode_fixed.setPlaceholderText('如：alt+2')
+        hotkey_form.addRow('切换固定模式热键', self._edit_hotkey_mode_fixed)
+
+        self._edit_hotkey_mode_multi = QLineEdit()
+        self._edit_hotkey_mode_multi.setPlaceholderText('如：alt+3')
+        hotkey_form.addRow('切换多框模式热键', self._edit_hotkey_mode_multi)
+
+        self._edit_hotkey_mode_ai = QLineEdit()
+        self._edit_hotkey_mode_ai.setPlaceholderText('如：alt+4')
+        hotkey_form.addRow('切换AI框选热键', self._edit_hotkey_mode_ai)
+
+        gen_layout.addWidget(hotkey_group)
 
         tabs.addTab(gen, '通用')
 
@@ -285,6 +379,57 @@ class SettingsWindow(QDialog):
             key_form.addRow(label, row_widget)
 
         tabs.addTab(key_tab, 'API 密钥')
+
+        # ── 外观（皮肤选择）────────────────────────────────────────
+        skin_tab = QWidget()
+        skin_v = QVBoxLayout(skin_tab)
+        skin_v.setSpacing(10)
+        skin_v.setContentsMargins(10, 10, 10, 10)
+
+        skin_tip = QLabel('选择一个皮肤，保存后立即生效。可随时切换，所有窗口同步更新。')
+        skin_tip.setWordWrap(True)
+        skin_tip.setStyleSheet('color: #888; font-size: 11px; padding-bottom: 4px;')
+        skin_v.addWidget(skin_tip)
+
+        # 卡片网格（每行 3 个）
+        self._skin_cards: dict[str, _SkinCard] = {}
+        grid_widget = QWidget()
+        grid = QGridLayout(grid_widget)
+        grid.setSpacing(10)
+        for idx, sid in enumerate(list_skins()):
+            card = _SkinCard(sid, SKINS[sid])
+            card.clicked.connect(self._on_skin_card_clicked)
+            self._skin_cards[sid] = card
+            grid.addWidget(card, idx // 3, idx % 3)
+        skin_v.addWidget(grid_widget)
+
+        variant_group = QGroupBox('Button Style')
+        variant_layout = QVBoxLayout(variant_group)
+        variant_layout.setContentsMargins(10, 10, 10, 10)
+        variant_layout.setSpacing(6)
+
+        variant_help = QLabel(
+            'Skin controls the overall palette. Button style controls emphasis, typography, and icons.'
+        )
+        variant_help.setWordWrap(True)
+        variant_help.setStyleSheet('color: #888; font-size: 11px;')
+        variant_layout.addWidget(variant_help)
+
+        self._button_style_variant_group = QButtonGroup(self)
+        self._button_style_variant_buttons: dict[str, QRadioButton] = {}
+        for variant_id, label in (
+            ('calm', 'A - Calm Hierarchy'),
+            ('semantic', 'B - Functional Color'),
+        ):
+            button = QRadioButton(label)
+            self._button_style_variant_group.addButton(button)
+            self._button_style_variant_buttons[variant_id] = button
+            variant_layout.addWidget(button)
+
+        skin_v.addWidget(variant_group)
+        skin_v.addStretch()
+
+        tabs.addTab(skin_tab, '外观')
         layout.addWidget(tabs)
 
         # 按钮行
@@ -368,6 +513,16 @@ class SettingsWindow(QDialog):
         self._refresh_dict_status()
         self._sync_dict_group_visibility()
 
+        # 皮肤卡片
+        current_skin = self.settings.get('skin', 'deep_space')
+        for sid, card in self._skin_cards.items():
+            card.set_selected(sid == current_skin)
+
+        current_variant = self.settings.get('button_style_variant', 'calm')
+        if current_variant not in self._button_style_variant_buttons:
+            current_variant = 'calm'
+        self._button_style_variant_buttons[current_variant].setChecked(True)
+
     def _save(self):
         self.settings.set('temp_box_timeout', self._spin_timeout.value())
         self.settings.set('auto_translate_interval', self._spin_interval.value())
@@ -401,8 +556,31 @@ class SettingsWindow(QDialog):
         self.settings.set('para_split_enabled', self._para_check.isChecked())
         self.settings.set('para_gap_ratio', self._para_ratio_spin.value())
 
+        # 皮肤
+        selected_skin = next(
+            (sid for sid, card in self._skin_cards.items() if card._selected),
+            'deep_space'
+        )
+        self.settings.set('skin', selected_skin)
+
+        selected_variant = next(
+            (
+                variant_id
+                for variant_id, button in self._button_style_variant_buttons.items()
+                if button.isChecked()
+            ),
+            'calm'
+        )
+        self.settings.set('button_style_variant', selected_variant)
+
         self.settings_saved.emit()
         self.close()
+
+    # ── 皮肤 ───────────────────────────────────────────────────────
+
+    def _on_skin_card_clicked(self, skin_id: str):
+        for sid, card in self._skin_cards.items():
+            card.set_selected(sid == skin_id)
 
     # ── 离线词典 ──────────────────────────────────────────────
 
@@ -452,6 +630,15 @@ class SettingsWindow(QDialog):
             item.setData(Qt.UserRole, name)
             item.setCheckState(Qt.Checked if name in enabled else Qt.Unchecked)
             self._list_backends.addItem(item)
+
+        default_skin = DEFAULTS.get('skin', 'deep_space')
+        for sid, card in self._skin_cards.items():
+            card.set_selected(sid == default_skin)
+
+        default_variant = DEFAULTS.get('button_style_variant', 'calm')
+        if default_variant not in self._button_style_variant_buttons:
+            default_variant = 'calm'
+        self._button_style_variant_buttons[default_variant].setChecked(True)
 
         self._sync_dict_group_visibility()
 
