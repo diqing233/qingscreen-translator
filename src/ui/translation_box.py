@@ -248,6 +248,7 @@ class TranslationBox(QWidget):
         hover_color="white",
         pressed_background=None,
         radius=_BUTTON_RADIUS,
+        padding="0 8px",
         font_size=None,
         font_weight=500,
     ):
@@ -260,6 +261,7 @@ class TranslationBox(QWidget):
                 color: {color};
                 border: 1px solid {border};
                 border-radius: {radius}px;
+                padding: {padding};
                 font-size: {font_size}px;
                 font-weight: {font_weight};
             }}
