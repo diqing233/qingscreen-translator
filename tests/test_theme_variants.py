@@ -62,3 +62,27 @@ def test_minimal_in_list_skins():
 
 def test_coral_in_list_skins():
     assert 'coral' in theme.list_skins()
+
+
+def test_forest_skin_exists_and_has_correct_tokens():
+    skin = theme.get_skin('forest')
+
+    assert skin['dark'] == True
+    assert skin['bg_rgb'] == (26, 46, 26)
+    assert '76,175,80' in skin['btn_primary_bg']
+
+
+def test_retro_skin_exists_and_has_correct_tokens():
+    skin = theme.get_skin('retro')
+
+    assert skin['dark'] == True
+    assert skin['bg_rgb'] == (42, 26, 8)
+    assert '200,134,10' in skin['btn_primary_bg']
+
+
+def test_forest_in_list_skins():
+    assert 'forest' in theme.list_skins()
+
+
+def test_retro_in_list_skins():
+    assert 'retro' in theme.list_skins()
