@@ -86,3 +86,39 @@ def test_forest_in_list_skins():
 
 def test_retro_in_list_skins():
     assert 'retro' in theme.list_skins()
+
+
+def test_cyberpunk_skin_exists_and_has_correct_tokens():
+    skin = theme.get_skin('cyberpunk')
+
+    assert skin['dark'] == True
+    assert skin['bg_rgb'] == (10, 0, 24)
+    assert skin['text'] == '#ff00ff'
+
+
+def test_ink_skin_exists_and_has_correct_tokens():
+    skin = theme.get_skin('ink')
+
+    assert skin['dark'] == False
+    assert skin['bg_rgb'] == (245, 240, 232)
+    assert skin['text'] == '#2c1a00'
+
+
+def test_mint_skin_exists_and_has_correct_tokens():
+    skin = theme.get_skin('mint')
+
+    assert skin['dark'] == False
+    assert skin['bg_rgb'] == (232, 250, 244)
+    assert '0,137,123' in skin['btn_primary_bg']
+
+
+def test_cyberpunk_in_list_skins():
+    assert 'cyberpunk' in theme.list_skins()
+
+
+def test_ink_in_list_skins():
+    assert 'ink' in theme.list_skins()
+
+
+def test_mint_in_list_skins():
+    assert 'mint' in theme.list_skins()
