@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a global button-style variant setting so every skin can switch between the Calm Hierarchy and Functional Color button systems from the Appearance settings.
+**Goal:** Add a global button-style variant setting so every skin can switch between the Calm Hierarchy and Functional Color button systems from the Appearance settings, while unifying button typography and rolling out the approved geometric icon family.
 
-**Architecture:** Keep the existing skin catalog intact and add a second configuration layer named `button_style_variant`. Theme composition should merge a base skin with variant-specific button token overrides, then all existing UI code should continue consuming the composed skin through the existing theme access path.
+**Architecture:** Keep the existing skin catalog intact and add a second configuration layer named `button_style_variant`. Theme composition should merge a base skin with variant-specific button token overrides, while shared button typography and icon helpers provide the consistent rendering layer used by the result bar, translation boxes, and settings-driven controls.
 
 **Tech Stack:** Python, PyQt5, pytest
 
@@ -130,9 +130,9 @@ git add src/ui/settings_window.py tests/test_settings.py
 git commit -m "feat: add button style selector to appearance settings"
 ```
 
-## Chunk 4: Apply variants across result bar and translation boxes
+## Chunk 4: Apply variants, typography, and icons across result bar and translation boxes
 
-### Task 4: Verify composed tokens flow through existing button code
+### Task 4: Verify composed tokens flow through existing button code and icon mappings
 
 **Files:**
 - Modify: `src/ui/result_bar.py`
@@ -147,15 +147,26 @@ Add focused assertions that construct widgets with both variants and verify:
 - widget creation succeeds
 - existing layout and ordering expectations still hold
 - style application paths still run for both variants
+- translation-box pin control no longer exposes the raw `钉` label
+- clear action still exposes the custom broom icon in the idle state
+- copy controls keep a consistent icon approach across result bar and translation box where applicable
 
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `C:\Users\Administrator\AppData\Local\Python\bin\python.exe -m pytest tests/test_result_bar_toolbar.py tests/test_subtitle.py -q`
 Expected: FAIL if any style path assumes a single skin-only model.
+Expected: FAIL if icon or typography expectations are not yet encoded.
 
 - [ ] **Step 3: Write minimal implementation**
 
 Update [result_bar.py](/c:/Users/Administrator/my-todo/src/ui/result_bar.py) and [translation_box.py](/c:/Users/Administrator/my-todo/src/ui/translation_box.py) only where needed so they consistently consume the composed skin and remain stable under both variants.
+Update [result_bar.py](/c:/Users/Administrator/my-todo/src/ui/result_bar.py) and [translation_box.py](/c:/Users/Administrator/my-todo/src/ui/translation_box.py) to:
+
+- consume the composed skin under both variants
+- apply the shared button typography choices
+- use the approved geometric icon family
+- keep the clear action on a broom icon
+- replace the translation-box `钉` label with a pin icon
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -202,6 +213,9 @@ Check:
 - both variants apply after save
 - result bar and translation box visibly change button language while keeping layout stable
 - unusual skins such as `matrix` and `rose` still maintain readable button contrast
+- broom icon reads clearly for clear translation
+- translation-box pin button reads clearly as a pin after replacing the text label
+- button typography feels consistent across toolbar and action-row controls
 
 - [ ] **Step 4: Commit**
 

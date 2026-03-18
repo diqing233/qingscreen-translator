@@ -4,7 +4,7 @@
 
 ## Goal
 
-Keep both approved button directions and let the user switch between them from the Appearance settings.
+Keep both approved button directions and let the user switch between them from the Appearance settings, while also unifying button typography and the core icon system.
 
 The switch should be global, not result-bar-only:
 
@@ -13,6 +13,13 @@ The switch should be global, not result-bar-only:
 - settings window and other skin-driven widgets
 
 The approved direction is to keep the existing skin system and add a second layer for button styling variants.
+
+The user has also approved these concrete visual choices for implementation:
+
+- keep both button variants in settings
+- use the `A` geometric icon family as the implementation default
+- use a broom icon for clear / clear-translation actions
+- replace the translation-box text pin button label `钉` with a geometric pin icon
 
 ## Context
 
@@ -123,6 +130,8 @@ Base skins remain the single source of truth for:
 
 Button variants override only button-related tokens and closely related accent tokens.
 
+Typography and icon rules should be global across both variants so the product still feels like one system.
+
 ### Recommended Token Boundary
 
 Existing tokens already group buttons well enough for a variant layer to override selectively:
@@ -157,6 +166,14 @@ Existing tokens already group buttons well enough for a variant layer to overrid
 - `split_active_border`
 - `split_text`
 
+Add a small set of cross-widget button presentation tokens or helpers for:
+
+- button font size tiers
+- button font weights
+- icon stroke color
+- icon active stroke color
+- icon size tiers for toolbar vs action-row buttons
+
 The implementation should compose tokens rather than mutate the base `SKINS` dictionaries in place.
 
 ## Settings UX
@@ -178,6 +195,12 @@ The selector should explain that:
 
 This avoids teaching users that A and B are separate full themes.
 
+The settings copy should also make clear that this selector affects:
+
+- button emphasis
+- button typography
+- button icon language
+
 ## Widget Scope
 
 The variant should apply anywhere buttons already use `get_skin(...)` output:
@@ -188,7 +211,62 @@ The variant should apply anywhere buttons already use `get_skin(...)` output:
 - floating translation-box buttons
 - settings-window buttons that are meant to follow global styling
 
+The icon redesign priority should cover the controls that currently feel most inconsistent:
+
+- translation-box pin control
+- copy controls
+- clear / stop-clear controls
+- paragraph / structure control
+- toolbar utility icons where text glyphs or mixed symbols are still used
+
 Window layout and behavior must not change as part of this work.
+
+## Typography System
+
+Button typography is in scope for this task.
+
+The goal is not a full application-wide body type redesign. The goal is to make button labels feel intentional and consistent.
+
+Recommended rules:
+
+- tool buttons and compact toolbar buttons share one compact size tier
+- action-row buttons use one slightly larger or heavier tier when needed
+- text-only buttons should avoid looking visually louder than icon-bearing buttons
+- Chinese labels such as `原文`, `翻译`, `AI科普`, `固定` should align in weight and spacing
+- icon + text combinations should keep stable gap and vertical alignment
+
+This keeps the controls visually coherent even when the button variant changes.
+
+## Icon System
+
+Icon redesign is in scope for this task.
+
+### Approved Direction
+
+Implement the geometric linear icon family from the browser comparison as the production direction.
+
+Characteristics:
+
+- sharp but not aggressive geometry
+- consistent stroke width
+- compact desktop-tool readability
+- no emoji
+- no mixed icon metaphors across similar actions
+
+### Specific Approved Mappings
+
+- clear / clear translation: broom icon
+- translation-box pin control: replace text `钉` with a pin icon
+- copy actions: unified geometric copy icon
+- paragraph / structure action: replace raw symbolic treatment with a structured geometric icon where practical
+
+### Interaction Rules
+
+- hover and active states should recolor the icon through the same button-state system rather than through unrelated ad hoc styling
+- icon size should remain stable across hover and active states
+- icon drawing should avoid layout shift and avoid bitmap assets when a local vector drawing helper is sufficient
+
+## Behavior Rules
 
 ## Behavior Rules
 
@@ -196,6 +274,7 @@ Window layout and behavior must not change as part of this work.
 - existing layout, ordering, and signals must remain unchanged
 - busy and disabled states must remain more important than pure stylistic differences
 - semantic coloring must not reduce readability on niche skins such as `matrix` or `rose`
+- icon replacements must preserve the existing click targets and button semantics
 
 ## Testing
 
@@ -214,6 +293,15 @@ Add focused tests for theme composition logic:
 - variant-specific button tokens differ between `calm` and `semantic`
 - non-button tokens stay inherited from the selected skin
 
+### Typography and Icon Integration
+
+Extend UI tests to cover:
+
+- translation-box pin button no longer uses the text label `钉`
+- clear button continues to expose the broom icon path correctly in idle state
+- copy actions continue to use a consistent custom icon path
+- widgets still preserve button size and ordering after icon replacement
+
 ### UI Integration
 
 Extend existing UI tests to verify:
@@ -222,7 +310,7 @@ Extend existing UI tests to verify:
 - result bar and translation box continue to construct correctly with either variant
 - no control ordering or enable/disable behavior regresses
 
-Visual exact-color assertions are not required; behavior and token selection are the important automated checks.
+Visual exact-color assertions are not required; behavior, token selection, and icon usage are the important automated checks.
 
 ## Risks
 
@@ -245,7 +333,7 @@ Mitigation:
 
 ## Out of Scope
 
-- replacing all icons in this task
 - redesigning layout or panel ordering
 - changing translation workflows
+- full application body-text typography overhaul
 - adding live preview inside the settings dialog unless it becomes necessary during implementation
