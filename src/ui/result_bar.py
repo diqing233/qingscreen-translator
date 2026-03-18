@@ -66,6 +66,13 @@ _TOOLBAR_ICON_W = 22
 _SMALL_TOOLBAR_BUTTON_W = 26
 _BUTTON_RADIUS = 5
 
+# ── Shared neutral button base metrics (applied to all helper styles) ───
+# All non-primary buttons share these metrics for consistent visual rhythm.
+_BTN_H          = _TOOLBAR_BUTTON_H   # 22 px
+_BTN_RADIUS     = _BUTTON_RADIUS      # 5 px
+_BTN_PADDING    = '0 8px'             # horizontal padding
+_BTN_BORDER_PX  = 1                   # border weight in px
+
 
 # ── 任务栏最小化代理窗口 ─────────────────────────────────────────
 
@@ -182,36 +189,37 @@ class TranslateToggle(QWidget):
         r = h // 2
         mid = w // 2
 
-        # Track background
-        track_border = QColor(*s.get('toggle_track_border', (255, 255, 255, 28)))
+        # Track background — slightly more visible border for clarity
+        track_border = QColor(*s.get('toggle_track_border', (255, 255, 255, 40)))
         track_bg = QColor(*s.get('toggle_track', (29, 31, 41, 228)))
         p.setPen(QPen(track_border, 1))
         p.setBrush(track_bg)
         p.drawRoundedRect(0, 0, w - 1, h - 1, r, r)
 
-        # Active pill
+        # Active pill — calmer hues: use theme colors but keep alpha moderate
         pill_x = mid if self._auto else 0
-        auto_c = s.get('toggle_auto', (78, 170, 103, 224))
-        manual_c = s.get('toggle_manual', (82, 132, 236, 224))
+        auto_c  = s.get('toggle_auto',   (72, 158,  96, 210))
+        manual_c = s.get('toggle_manual', (76, 122, 218, 210))
         pill_color = QColor(*auto_c) if self._auto else QColor(*manual_c)
         p.setBrush(pill_color)
         p.setPen(Qt.NoPen)
         p.drawRoundedRect(pill_x + 1, 1, mid - 2, h - 2, r - 1, r - 1)
 
-        p.setPen(QPen(QColor(255, 255, 255, 18), 1))
+        # Divider — more visible than before for clear segmentation
+        p.setPen(QPen(QColor(255, 255, 255, 28), 1))
         p.drawLine(mid, 4, mid, h - 5)
 
-        # Text labels
+        # Text labels — clearer contrast: active side bright, inactive side dim
         f = p.font()
         f.setPixelSize(12)
         p.setFont(f)
 
-        txt_color = QColor(255, 255, 255, 235)
-        txt_dim = QColor(255, 255, 255, 108)
-        p.setPen(txt_dim if self._auto else txt_color)
+        txt_bright = QColor(255, 255, 255, 240)   # active side label
+        txt_dim    = QColor(255, 255, 255,  90)    # inactive side label (dimmer for separation)
+        p.setPen(txt_dim if self._auto else txt_bright)
         p.drawText(0, 0, mid, h, Qt.AlignCenter, '点击')
 
-        p.setPen(txt_color if self._auto else txt_dim)
+        p.setPen(txt_bright if self._auto else txt_dim)
         p.drawText(mid, 0, mid, h, Qt.AlignCenter, '自动')
 
     def mousePressEvent(self, event):
@@ -274,8 +282,11 @@ class _SplitButton(QWidget):
         def a(v):
             return int(v * fade)
 
+        # Active state: mild lift using btn_hover/btn_active_border — mirrors
+        # the softened _action_btn_style(active=True) treatment.
         if self._active:
-            _ab = s.get('split_active_bg', (74, 78, 98, 194))
+            # Use the hover background (mild lift) + a slightly raised border
+            _ab = s.get('split_active_bg', (70, 74, 92, 204))   # slightly lighter than idle
             _ac = s.get('split_active_border', (142, 165, 220, 72))
             background = QColor(_ab[0], _ab[1], _ab[2], a(_ab[3]))
             border = QColor(_ac[0], _ac[1], _ac[2], a(_ac[3]))
@@ -286,7 +297,7 @@ class _SplitButton(QWidget):
             border = QColor(_sc[0], _sc[1], _sc[2], a(_sc[3]))
         _tc = s.get('split_text', (236, 239, 247, 236))
         text_color = QColor(_tc[0], _tc[1], _tc[2], _tc[3] if self._active else a(_tc[3]))
-        hover_fill = QColor(255, 255, 255, 18 if self._active else 14)
+        hover_fill = QColor(255, 255, 255, 16 if self._active else 12)
 
         painter.setPen(QPen(border, 1))
         painter.setBrush(background)
@@ -307,16 +318,16 @@ class _SplitButton(QWidget):
             painter.drawRoundedRect(0, 0, w - 1, h - 1, _BUTTON_RADIUS, _BUTTON_RADIUS)
             painter.restore()
 
-        painter.setPen(QPen(QColor(255, 255, 255, a(36)), 1))
+        painter.setPen(QPen(QColor(255, 255, 255, a(32)), 1))
         painter.drawLine(div_x, 3, div_x, h - 4)
 
         painter.setPen(
-            QColor(255, 255, 255, 238) if (enabled and self._hover_left) else text_color
+            QColor(255, 255, 255, 230) if (enabled and self._hover_left) else text_color
         )
         painter.drawText(QRect(0, 0, div_x, h), Qt.AlignCenter, self._left_label)
 
         painter.setPen(
-            QColor(255, 255, 255, 238) if (enabled and self._hover_right) else text_color
+            QColor(255, 255, 255, 230) if (enabled and self._hover_right) else text_color
         )
         painter.drawText(QRect(div_x, 0, w - div_x, h), Qt.AlignCenter, self._arrow)
 
@@ -802,25 +813,36 @@ class ResultBar(QWidget):
         )
 
     def _action_btn_style(self, active: bool = False) -> str:
+        """Style for action-row helper buttons (_btn_source, _btn_para_num, etc.).
+
+        When active=True the button shows a *mild lift* (slightly lighter
+        border/background) rather than a high-emphasis CTA fill.  Strong
+        accent colours are reserved for true mode buttons (_mode_btn_style).
+        """
         s = self._skin
         if active:
+            # Mild active lift: step up border opacity, slightly lighter bg.
+            # We deliberately avoid btn_active_bg here so expand-buttons don't
+            # look like primary CTA buttons when open.
             return self._solid_button_style(
-                background=s['btn_active_bg'],
-                color=s['btn_active_fg'],
-                border=s['btn_active_border'],
-                hover_background=s['btn_active_hover'],
-                padding='0 9px',
+                background=s['btn_hover'],
+                color=s['btn_fg'],
+                border=s.get('btn_active_border', s['btn_border']),
+                hover_background=s['btn_hover'],
+                padding=_BTN_PADDING,
                 font_size=int(s.get('button_font_size_action', 12)),
                 font_weight=int(s.get('button_font_weight', 600)),
+                radius=_BTN_RADIUS,
             )
         return self._solid_button_style(
             background=s['btn_bg'],
             color=s['btn_fg'],
             border=s['btn_border'],
             hover_background=s['btn_hover'],
-            padding='0 9px',
+            padding=_BTN_PADDING,
             font_size=int(s.get('button_font_size_action', 12)),
             font_weight=int(s.get('button_font_weight', 600)),
+            radius=_BTN_RADIUS,
         )
 
     def _small_toolbar_btn(self, label: str, tip: str, callback) -> QPushButton:
@@ -832,6 +854,9 @@ class ResultBar(QWidget):
         return btn
 
     def _small_toolbar_btn_style(self) -> str:
+        """Compact toolbar buttons (overlay A+/A-/✕).
+        Uses the shared neutral base radius and border weight.
+        """
         s = self._skin
         return self._solid_button_style(
             background=s['btn_bg'],
@@ -841,9 +866,16 @@ class ResultBar(QWidget):
             padding='0 6px',
             font_size=int(s.get('button_font_size_compact', 12)),
             font_weight=600,
+            radius=_BTN_RADIUS,
         )
 
     def _mode_btn_style(self, active: bool) -> str:
+        """Style for true mode-toggle buttons (_btn_box_mode_cycle, _btn_ai_mode).
+
+        Active state uses the highest-contrast accent (blue/green) to signal
+        the current operating mode.  This is the only non-primary button
+        category that uses a strong filled active treatment.
+        """
         s = self._skin
         if active:
             return self._solid_button_style(
@@ -851,21 +883,26 @@ class ResultBar(QWidget):
                 color='white',
                 border=s['btn_mode_active_border'],
                 hover_background=s['btn_mode_active_hover'],
-                padding='0 8px',
+                padding=_BTN_PADDING,
                 font_size=int(s.get('button_font_size_toolbar', 12)),
                 font_weight=600,
+                radius=_BTN_RADIUS,
             )
         return self._solid_button_style(
             background=s['btn_bg'],
             color=s['btn_fg'],
             border=s['btn_border'],
             hover_background=s['btn_hover'],
-            padding='0 8px',
+            padding=_BTN_PADDING,
             font_size=int(s.get('button_font_size_toolbar', 12)),
             font_weight=500,
+            radius=_BTN_RADIUS,
         )
 
     def _lang_btn_style(self) -> str:
+        """Language selector dropdown buttons.
+        Neutral styling consistent with other toolbar helpers.
+        """
         s = self._skin
         return self._solid_button_style(
             background=s['btn_bg'],
@@ -875,17 +912,25 @@ class ResultBar(QWidget):
             hover_color=s.get('text', 'white'),
             padding='0 10px',
             font_size=int(s.get('button_font_size_toolbar', 12)),
+            radius=_BTN_RADIUS,
         )
 
     def _icon_btn_style(self) -> str:
+        """Top-toolbar icon-only buttons (copy, history, settings, minimize, close).
+
+        These stay fully transparent by default (ghost) and show only a faint
+        background on hover — intentionally *more subtle* than action-row
+        buttons.  We share the same border-radius constant for pixel consistency.
+        """
         s = self._skin
         muted = s.get('text_muted', 'rgba(166,170,186,204)')
+        r = _BTN_RADIUS
         return f'''
             QPushButton {{ background: transparent; color: {muted};
-                          border: none; font-size: 13px; }}
+                          border: none; font-size: 13px; border-radius: {r}px; }}
             QPushButton:hover {{ color: {s.get('text', 'white')}; background: rgba(255,255,255,12);
-                                border-radius: 4px; }}
-            QPushButton:pressed {{ background: rgba(255,255,255,18); }}
+                                border-radius: {r}px; }}
+            QPushButton:pressed {{ background: rgba(255,255,255,18); border-radius: {r}px; }}
         '''
 
     def _icon_btn(self, icon: str, tip: str, cb) -> QPushButton:
