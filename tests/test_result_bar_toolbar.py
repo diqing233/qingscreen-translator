@@ -529,3 +529,28 @@ def test_ai_split_button_right_region_emits_right_clicked():
 
     assert left_hits == []
     assert right_hits == [1]
+
+
+def test_temp_mode_hint_dialog_ok(qtbot):
+    from unittest.mock import MagicMock
+    from ui.result_bar import _TempModeHintDialog
+    settings = MagicMock()
+    settings.get.side_effect = lambda k, d=None: {'temp_mode_hint_dismissed': False}.get(k, d)
+    skin = {}
+    dlg = _TempModeHintDialog(settings, skin)
+    qtbot.addWidget(dlg)
+    dlg._btn_ok.click()
+    assert not dlg.isVisible()
+    settings.set.assert_not_called()
+
+def test_temp_mode_hint_dialog_dismiss(qtbot):
+    from unittest.mock import MagicMock
+    from ui.result_bar import _TempModeHintDialog
+    settings = MagicMock()
+    settings.get.side_effect = lambda k, d=None: {'temp_mode_hint_dismissed': False}.get(k, d)
+    skin = {}
+    dlg = _TempModeHintDialog(settings, skin)
+    qtbot.addWidget(dlg)
+    dlg._btn_dismiss.click()
+    assert not dlg.isVisible()
+    settings.set.assert_called_once_with('temp_mode_hint_dismissed', True)

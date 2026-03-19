@@ -97,6 +97,70 @@ class _MinimizeProxy(QMainWindow):
             self._result_bar._restore_from_taskbar()
 
 
+class _TempModeHintDialog(QWidget):
+    """切换到临时模式时弹出的一次性提示。"""
+
+    def __init__(self, settings, skin, parent=None):
+        super().__init__(parent, Qt.Dialog | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self._settings = settings
+        self.setAttribute(Qt.WA_TranslucentBackground)
+
+        bg   = skin.get('surface', '#1a1f2e')
+        fg   = skin.get('text',    '#e8eaf0')
+        acc  = skin.get('accent',  '#4a90e2')
+        rad  = skin.get('radius',  8)
+
+        container = QWidget(self)
+        container.setObjectName('hint_container')
+        container.setStyleSheet(
+            f"#hint_container {{ background: {bg}; border-radius: {rad}px; }}"
+        )
+
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(20, 16, 20, 16)
+        layout.setSpacing(10)
+
+        title = QLabel('临时模式提示')
+        title.setStyleSheet(f"color: {fg}; font-weight: bold; font-size: 13px; background: transparent;")
+        layout.addWidget(title)
+
+        body = QLabel(
+            '翻译条将自动最小化，翻译结果会直接\n'
+            '显示在选区框下方。\n\n'
+            '按 Alt+Q 框选并翻译。'
+        )
+        body.setStyleSheet(f"color: {fg}; font-size: 12px; background: transparent;")
+        layout.addWidget(body)
+
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+
+        self._btn_dismiss = QPushButton('不再提示')
+        self._btn_ok      = QPushButton('好的')
+        for btn in (self._btn_dismiss, self._btn_ok):
+            btn.setFixedHeight(26)
+            btn.setStyleSheet(
+                f"QPushButton {{ background: transparent; color: {fg}; border: 1px solid {acc}; "
+                f"border-radius: 4px; padding: 0 12px; }}"
+                f"QPushButton:hover {{ background: {acc}; color: #fff; }}"
+            )
+        btn_row.addStretch()
+        btn_row.addWidget(self._btn_dismiss)
+        btn_row.addWidget(self._btn_ok)
+        layout.addLayout(btn_row)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(container)
+
+        self._btn_ok.clicked.connect(self.close)
+        self._btn_dismiss.clicked.connect(self._on_dismiss)
+
+    def _on_dismiss(self):
+        self._settings.set('temp_mode_hint_dismissed', True)
+        self.close()
+
+
 class _ResetSizeBtn(QPushButton):
     """恢复默认大小按钮，用 QPainter 绘制圆形刷新箭头"""
     def __init__(self, parent=None):
@@ -753,7 +817,7 @@ class ResultBar(QWidget):
         color: str,
         border: str,
         hover_background: str,
-        hover_color: str = 'white',
+        hover_color: str = None,
         pressed_background: str = None,
         disabled_background: str = None,
         disabled_color: str = 'rgba(170,174,190,130)',
@@ -762,6 +826,8 @@ class ResultBar(QWidget):
         font_size: int = 12,
         font_weight: int = 500,
     ) -> str:
+        if hover_color is None:
+            hover_color = self._skin.get('text', 'white')
         pressed_background = pressed_background or hover_background
         disabled_background = disabled_background or background
         return f'''
@@ -925,12 +991,15 @@ class ResultBar(QWidget):
         s = self._skin
         muted = s.get('text_muted', 'rgba(166,170,186,204)')
         r = _BTN_RADIUS
+        is_dark = s.get('dark', True)
+        hover_bg = 'rgba(255,255,255,12)' if is_dark else 'rgba(0,0,0,8)'
+        pressed_bg = 'rgba(255,255,255,18)' if is_dark else 'rgba(0,0,0,14)'
         return f'''
             QPushButton {{ background: transparent; color: {muted};
                           border: none; font-size: 13px; border-radius: {r}px; }}
-            QPushButton:hover {{ color: {s.get('text', 'white')}; background: rgba(255,255,255,12);
+            QPushButton:hover {{ color: {s.get('text', 'white')}; background: {hover_bg};
                                 border-radius: {r}px; }}
-            QPushButton:pressed {{ background: rgba(255,255,255,18); border-radius: {r}px; }}
+            QPushButton:pressed {{ background: {pressed_bg}; border-radius: {r}px; }}
         '''
 
     def _icon_btn(self, icon: str, tip: str, cb) -> QPushButton:
