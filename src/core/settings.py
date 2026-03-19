@@ -26,6 +26,8 @@ DEFAULTS = {
     'button_style_variant': 'calm',
     'font_set': None,
     'icon_set': None,
+    'temp_mode_hide_bar': True,
+    'temp_mode_hint_dismissed': False,
     'translation_order': ['dictionary', 'bing', 'google', 'baidu', 'deepl', 'zhipu', 'siliconflow', 'moonshot', 'deepseek', 'openai', 'claude', 'sogou', 'youdao'],
     'enabled_backends': ['bing', 'google', 'zhipu'],
     'api_keys': {

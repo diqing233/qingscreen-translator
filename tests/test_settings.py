@@ -161,6 +161,12 @@ def test_settings_window_skin_selector_contains_all_13_skins():
     assert actual == expected, f"缺少皮肤: {expected - actual}, 多余皮肤: {actual - expected}"
 
 
+def test_temp_mode_defaults():
+    store = make_store()
+    assert store.get('temp_mode_hide_bar') is True
+    assert store.get('temp_mode_hint_dismissed') is False
+
+
 def test_skin_kawaii_persists():
     """保存 skin='kawaii' 后重新加载应返回 'kawaii'。"""
     f = tempfile.NamedTemporaryFile(suffix='.json', delete=False)
