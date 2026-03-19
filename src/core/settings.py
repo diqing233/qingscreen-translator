@@ -24,6 +24,8 @@ DEFAULTS = {
     'para_gap_ratio': 0.5,
     'skin': 'deep_space',
     'button_style_variant': 'calm',
+    'font_set': None,
+    'icon_set': None,
     'translation_order': ['dictionary', 'bing', 'google', 'baidu', 'deepl', 'zhipu', 'siliconflow', 'moonshot', 'deepseek', 'openai', 'claude', 'sogou', 'youdao'],
     'enabled_backends': ['bing', 'google', 'zhipu'],
     'api_keys': {

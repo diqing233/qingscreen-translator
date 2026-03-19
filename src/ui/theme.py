@@ -640,6 +640,47 @@ SKINS = {
         'swatch': ('#fff5f8', '#ff85a8', '#ffb347'),
     },
 
+    # 15. 清纯校园：天空蓝白 ─────────────────────────────────────
+    'campus': {
+        'name': '清纯校园', 'description': '天空蓝白，青春制服感', 'dark': False,
+        'bg_rgb': (240, 248, 255), 'border': 'rgba(80,144,240,25)', 'radius': 8,
+        'text': '#1a3060', 'text_muted': 'rgba(60,100,180,210)', 'text_ocr': 'rgba(40,80,160,160)',
+        'btn_bg': 'rgba(200,220,255,190)', 'btn_border': 'rgba(80,144,240,35)',
+        'btn_fg': 'rgba(26,48,96,220)', 'btn_hover': 'rgba(180,205,255,215)',
+        'btn_disabled_bg': 'rgba(200,220,255,100)', 'btn_disabled_fg': 'rgba(80,120,180,110)',
+        'btn_active_bg': 'rgba(80,144,240,180)', 'btn_active_border': 'rgba(255,180,60,130)',
+        'btn_active_fg': 'rgba(255,255,255,240)', 'btn_active_hover': 'rgba(60,120,220,200)',
+        'btn_primary_bg': 'rgba(80,144,240,210)', 'btn_primary_border': 'rgba(255,180,60,160)',
+        'btn_primary_hover': 'rgba(60,120,220,230)',
+        'btn_danger_bg': 'rgba(200,40,40,180)', 'btn_danger_border': 'rgba(220,80,80,120)',
+        'btn_danger_hover': 'rgba(180,30,30,200)',
+        'btn_stop_bg': 'rgba(200,40,40,180)', 'btn_stop_border': 'rgba(220,80,80,120)',
+        'btn_stop_hover': 'rgba(180,30,30,200)',
+        'btn_mode_active_bg': 'rgba(80,144,240,200)', 'btn_mode_active_border': 'rgba(255,180,60,150)',
+        'btn_mode_active_hover': 'rgba(60,120,220,220)',
+        'box_border_temp': (120, 170, 240, 140), 'box_border_fixed': (80, 144, 240, 200),
+        'box_fill': (220, 235, 255, 8),
+        'overlay_bg': (235, 245, 255, 238), 'overlay_text': '#1a3060',
+        'overlay_border': (80, 144, 240, 90),
+        'overlay_below_bg': (228, 240, 255, 230), 'overlay_below_text': '#1a3060',
+        'overlay_below_border': (60, 120, 220, 70),
+        'toggle_track': (200, 220, 255, 220), 'toggle_track_border': (80, 144, 240, 30),
+        'toggle_manual': (80, 144, 240, 220), 'toggle_auto': (100, 180, 80, 220),
+        'split_bg': (200, 220, 255, 200), 'split_border': (80, 144, 240, 35),
+        'split_active_bg': (80, 144, 240, 185), 'split_active_border': (255, 180, 60, 130),
+        'split_text': (26, 48, 96, 230),
+        'menu_bg': 'rgba(235,245,255,245)', 'menu_text': 'rgba(26,48,96,230)',
+        'menu_border': 'rgba(80,144,240,30)', 'menu_selected': 'rgba(80,144,240,180)',
+        'menu_checked': 'rgba(40,80,200,255)',
+        'scrollbar_bg': 'rgba(80,144,240,8)', 'scrollbar_handle': 'rgba(80,144,240,45)',
+        'sep_color': 'rgba(80,144,240,18)',
+        'source_editor_bg': 'rgba(80,144,240,6)', 'source_editor_border': 'rgba(80,144,240,28)',
+        'source_editor_text': 'rgba(26,48,96,220)',
+        'explain_bg': 'rgba(255,200,60,10)', 'explain_text': 'rgba(20,60,160,220)',
+        'swatch': ('#f0f8ff', '#5090f0', '#ffb43c'),
+        'default_font_set': 'sans', 'default_icon_set': 'phosphor-regular',
+    },
+
     # 12. 薄荷清风：清新绿白 ─────────────────────────────────────
     'mint': {
         'name': '薄荷清风', 'description': '清新薄荷绿白，简洁现代', 'dark': False,
@@ -743,11 +784,136 @@ BUTTON_STYLE_VARIANTS = {
 }
 
 
+# ── 字体集 ────────────────────────────────────────────────────────
+
+FONT_SETS = {
+    'sans': {
+        'font_family': '"Noto Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif',
+        'font_size_translation': 14,
+        'font_size_ui': 12,
+        'font_size_small': 11,
+        'font_weight_translation': 400,
+        'font_weight_ui': 400,
+    },
+    'mono': {
+        'font_family': '"JetBrains Mono", "Noto Sans SC", "Microsoft YaHei", monospace',
+        'font_size_translation': 13,
+        'font_size_ui': 12,
+        'font_size_small': 11,
+        'font_weight_translation': 400,
+        'font_weight_ui': 400,
+    },
+    'rounded': {
+        'font_family': '"Nunito", "Noto Sans SC", "Microsoft YaHei", sans-serif',
+        'font_size_translation': 14,
+        'font_size_ui': 12,
+        'font_size_small': 11,
+        'font_weight_translation': 400,
+        'font_weight_ui': 600,
+    },
+    'serif': {
+        'font_family': '"Noto Serif SC", "SimSun", "STSong", serif',
+        'font_size_translation': 14,
+        'font_size_ui': 12,
+        'font_size_small': 11,
+        'font_weight_translation': 400,
+        'font_weight_ui': 400,
+    },
+    'display': {
+        'font_family': '"Orbitron", "Noto Sans SC", "Microsoft YaHei", sans-serif',
+        'font_size_translation': 13,
+        'font_size_ui': 11,
+        'font_size_small': 10,
+        'font_weight_translation': 500,
+        'font_weight_ui': 600,
+    },
+}
+
+DEFAULT_FONT_SET = 'sans'
+
+# ── 图标集 ────────────────────────────────────────────────────────
+
+_PH = {
+    'icon_copy':      '\ue1ca',
+    'icon_close':     '\ue4f6',
+    'icon_translate': '\ue4a2',
+    'icon_ai':        '\ue762',
+    'icon_pin':       '\ue3e2',
+    'icon_unpin':     '\ue3e4',
+    'icon_expand':    '\ue0a2',
+    'icon_collapse':  '\ue09a',
+    'icon_font_up':   '\ue6ee',
+    'icon_font_down': '\ue32a',
+    'icon_settings':  '\ue270',
+    'icon_history':   '\ue1a0',
+    'icon_paragraph': '\ue960',
+    'icon_broom':     '\uec54',
+    'icon_square':    '\ue45e',
+}
+
+ICON_SETS = {
+    'phosphor-light': {
+        'icon_font': 'Phosphor Light',
+        'icon_weight': 'light',
+        'icon_size_toolbar': 16,
+        'icon_size_action': 16,
+        **_PH,
+    },
+    'phosphor-regular': {
+        'icon_font': 'Phosphor',
+        'icon_weight': 'regular',
+        'icon_size_toolbar': 16,
+        'icon_size_action': 16,
+        **_PH,
+    },
+    'phosphor-bold': {
+        'icon_font': 'Phosphor Bold',
+        'icon_weight': 'bold',
+        'icon_size_toolbar': 16,
+        'icon_size_action': 16,
+        **_PH,
+    },
+}
+
+DEFAULT_ICON_SET = 'phosphor-regular'
+
+# ── 皮肤默认字体/图标集映射 ────────────────────────────────────────
+
+_SKIN_FONT_DEFAULTS = {
+    'deep_space': 'sans',  'frosted': 'sans',  'rose': 'sans',   'ocean': 'sans',
+    'coral': 'sans',       'minimal': 'sans',  'mint': 'sans',   'campus': 'sans',
+    'matrix': 'mono',      'retro': 'mono',
+    'kawaii': 'rounded',
+    'ink': 'serif',        'forest': 'serif',
+    'cyberpunk': 'display',
+}
+
+_SKIN_ICON_DEFAULTS = {
+    'ink': 'phosphor-light',     'minimal': 'phosphor-light',
+    'matrix': 'phosphor-bold',   'retro': 'phosphor-bold',   'cyberpunk': 'phosphor-bold',
+}
+
+for _sid in SKINS:
+    if 'default_font_set' not in SKINS[_sid]:
+        SKINS[_sid]['default_font_set'] = _SKIN_FONT_DEFAULTS.get(_sid, DEFAULT_FONT_SET)
+    if 'default_icon_set' not in SKINS[_sid]:
+        SKINS[_sid]['default_icon_set'] = _SKIN_ICON_DEFAULTS.get(_sid, DEFAULT_ICON_SET)
+
+
 # ── 公共辅助函数 ──────────────────────────────────────────────────
 
-def get_skin(name: str, button_style_variant: str = DEFAULT_BUTTON_STYLE_VARIANT) -> dict:
-    """Return a composed skin with button-style overrides layered onto the base skin."""
+def get_skin(
+    name: str,
+    button_style_variant: str = DEFAULT_BUTTON_STYLE_VARIANT,
+    font_set: str | None = None,
+    icon_set: str | None = None,
+) -> dict:
+    """Return a composed skin: base → font set → icon set → button style variant."""
     skin = dict(SKINS.get(name, SKINS[DEFAULT_SKIN]))
+    fs = font_set or skin.get('default_font_set', DEFAULT_FONT_SET)
+    skin.update(FONT_SETS.get(fs, FONT_SETS[DEFAULT_FONT_SET]))
+    ic = icon_set or skin.get('default_icon_set', DEFAULT_ICON_SET)
+    skin.update(ICON_SETS.get(ic, ICON_SETS[DEFAULT_ICON_SET]))
     variant = BUTTON_STYLE_VARIANTS.get(
         button_style_variant,
         BUTTON_STYLE_VARIANTS[DEFAULT_BUTTON_STYLE_VARIANT],

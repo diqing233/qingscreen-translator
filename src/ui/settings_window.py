@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                              QRadioButton, QButtonGroup)
 from PyQt5.QtCore import pyqtSignal, Qt
 from PyQt5.QtGui import QColor, QPainter, QPen
-from ui.theme import SKINS, list_skins
+from ui.theme import SKINS, list_skins, FONT_SETS, ICON_SETS
 
 BACKEND_LABELS = {
     'dictionary':   '📖 本地词典（离线极快）',
@@ -427,6 +427,47 @@ class SettingsWindow(QDialog):
             variant_layout.addWidget(button)
 
         skin_v.addWidget(variant_group)
+
+        # ── 字体集 ──────────────────────────────────────────────
+        font_group = QGroupBox('字体集')
+        font_layout = QVBoxLayout(font_group)
+        font_layout.setContentsMargins(10, 10, 10, 10)
+        font_layout.setSpacing(6)
+
+        font_help = QLabel('选择 None 跟随皮肤默认字体。')
+        font_help.setWordWrap(True)
+        font_help.setStyleSheet('color: #888; font-size: 11px;')
+        font_layout.addWidget(font_help)
+
+        self._combo_font_set = QComboBox()
+        self._combo_font_set.addItem('跟随皮肤默认', None)
+        self._combo_font_set.addItem('Sans · Noto Sans SC', 'sans')
+        self._combo_font_set.addItem('Mono · JetBrains Mono', 'mono')
+        self._combo_font_set.addItem('Rounded · Nunito', 'rounded')
+        self._combo_font_set.addItem('Serif · Noto Serif SC', 'serif')
+        self._combo_font_set.addItem('Display · Orbitron', 'display')
+        font_layout.addWidget(self._combo_font_set)
+        skin_v.addWidget(font_group)
+
+        # ── 图标集 ──────────────────────────────────────────────
+        icon_group = QGroupBox('图标集')
+        icon_layout = QVBoxLayout(icon_group)
+        icon_layout.setContentsMargins(10, 10, 10, 10)
+        icon_layout.setSpacing(6)
+
+        icon_help = QLabel('选择 None 跟随皮肤默认图标粗细。')
+        icon_help.setWordWrap(True)
+        icon_help.setStyleSheet('color: #888; font-size: 11px;')
+        icon_layout.addWidget(icon_help)
+
+        self._combo_icon_set = QComboBox()
+        self._combo_icon_set.addItem('跟随皮肤默认', None)
+        self._combo_icon_set.addItem('Phosphor Light', 'phosphor-light')
+        self._combo_icon_set.addItem('Phosphor Regular', 'phosphor-regular')
+        self._combo_icon_set.addItem('Phosphor Bold', 'phosphor-bold')
+        icon_layout.addWidget(self._combo_icon_set)
+        skin_v.addWidget(icon_group)
+
         skin_v.addStretch()
 
         tabs.addTab(skin_tab, '外观')
@@ -523,6 +564,15 @@ class SettingsWindow(QDialog):
             current_variant = 'calm'
         self._button_style_variant_buttons[current_variant].setChecked(True)
 
+        # 字体集 / 图标集
+        font_set = self.settings.get('font_set', None)
+        idx = self._combo_font_set.findData(font_set)
+        self._combo_font_set.setCurrentIndex(max(0, idx))
+
+        icon_set = self.settings.get('icon_set', None)
+        idx = self._combo_icon_set.findData(icon_set)
+        self._combo_icon_set.setCurrentIndex(max(0, idx))
+
     def _save(self):
         self.settings.set('temp_box_timeout', self._spin_timeout.value())
         self.settings.set('auto_translate_interval', self._spin_interval.value())
@@ -572,6 +622,9 @@ class SettingsWindow(QDialog):
             'calm'
         )
         self.settings.set('button_style_variant', selected_variant)
+
+        self.settings.set('font_set', self._combo_font_set.currentData())
+        self.settings.set('icon_set', self._combo_icon_set.currentData())
 
         self.settings_saved.emit()
         self.close()
@@ -639,6 +692,9 @@ class SettingsWindow(QDialog):
         if default_variant not in self._button_style_variant_buttons:
             default_variant = 'calm'
         self._button_style_variant_buttons[default_variant].setChecked(True)
+
+        self._combo_font_set.setCurrentIndex(0)
+        self._combo_icon_set.setCurrentIndex(0)
 
         self._sync_dict_group_visibility()
 

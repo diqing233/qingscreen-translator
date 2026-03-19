@@ -175,8 +175,8 @@ class TranslationBox(QWidget):
         self._btn_translate = self._make_btn("译", "立即翻译", lambda: self.translate_requested.emit(self), tone="primary")
         self._btn_pin = self._make_btn("钉", "固定/取消固定", self._on_toggle_pin)
         self._btn_pin.setText("")
-        self._btn_pin.setIcon(self._make_icon(self._draw_pin))
-        self._btn_pin.setIconSize(QSize(int(self._skin.get('button_icon_size_toolbar', 14)), int(self._skin.get('button_icon_size_toolbar', 14))))
+        self._btn_pin.setIcon(self._ph_icon('icon_pin'))
+        self._btn_pin.setIconSize(QSize(int(self._skin.get('icon_size_toolbar', 16)), int(self._skin.get('icon_size_toolbar', 16))))
         self._btn_subtitle = self._make_btn("⊞", "覆盖翻译", self._on_toggle_subtitle)
         self._btn_overlay_font_down = self._make_btn(
             "A-",
@@ -327,7 +327,32 @@ class TranslationBox(QWidget):
         return get_skin(
             self.settings.get('skin', 'deep_space'),
             self.settings.get('button_style_variant', 'calm'),
+            font_set=self.settings.get('font_set', None),
+            icon_set=self.settings.get('icon_set', None),
         )
+
+    def _ph_icon(self, codepoint_key: str, *, active: bool = False) -> QIcon:
+        """Render a Phosphor font character as a QIcon."""
+        from PyQt5.QtGui import QFont
+        s = self._skin
+        size = int(s.get('icon_size_toolbar', 16))
+        icon_font_name = s.get('icon_font', 'Phosphor')
+        char = s.get(codepoint_key, '')
+        if not char:
+            return QIcon()
+        color = self._icon_color(active=active)
+        pm = QPixmap(size, size)
+        pm.fill(Qt.transparent)
+        painter = QPainter(pm)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.TextAntialiasing)
+        font = QFont(icon_font_name)
+        font.setPixelSize(size)
+        painter.setFont(font)
+        painter.setPen(color)
+        painter.drawText(0, 0, size, size, Qt.AlignCenter, char)
+        painter.end()
+        return QIcon(pm)
 
     def _apply_button_style(self, btn, *, active=False, tone=None):
         s = self._skin
@@ -661,9 +686,9 @@ class TranslationBox(QWidget):
         self._apply_button_style(self._btn_subtitle, active=self._subtitle_mode != self.OVERLAY_OFF)
 
     def _update_pin_button(self):
-        icon_size = int(self._skin.get('button_icon_size_toolbar', 14))
+        icon_size = int(self._skin.get('icon_size_toolbar', 16))
         self._btn_pin.setText("")
-        self._btn_pin.setIcon(self._make_icon(self._draw_pin, active=self._position_locked))
+        self._btn_pin.setIcon(self._ph_icon('icon_unpin' if self._position_locked else 'icon_pin', active=self._position_locked))
         self._btn_pin.setIconSize(QSize(icon_size, icon_size))
         self._apply_button_style(self._btn_pin, active=self._position_locked)
 

@@ -414,6 +414,8 @@ class ResultBar(QWidget):
         return get_skin(
             self.settings.get('skin', 'deep_space'),
             self.settings.get('button_style_variant', 'calm'),
+            font_set=self.settings.get('font_set', None),
+            icon_set=self.settings.get('icon_set', None),
         )
 
     def _get_bg_alpha(self) -> int:
@@ -537,8 +539,8 @@ class ResultBar(QWidget):
 
         # 复制译文（工具栏快捷区）
         self._btn_copy_trans = self._icon_btn('', '复制译文到剪贴板', self._copy)
-        self._btn_copy_trans.setIcon(self._mk_icon(self._draw_copy))
-        self._btn_copy_trans.setIconSize(QSize(14, 14))
+        self._btn_copy_trans.setIcon(self._ph_icon('icon_copy'))
+        self._btn_copy_trans.setIconSize(QSize(16, 16))
         tb.addWidget(self._btn_copy_trans)
 
         tb.addSpacing(6)
@@ -572,7 +574,7 @@ class ResultBar(QWidget):
 
         # 右侧图标按钮（固定在滚动区外，不随工具栏内容滚动）
         self._btn_history  = self._icon_btn('', '翻译历史 (History)', self.history_requested.emit)
-        self._btn_history.setIcon(self._mk_icon(self._draw_clock, 18))
+        self._btn_history.setIcon(self._ph_icon('icon_history', 18))
         self._btn_history.setIconSize(QSize(18, 18))
         self._btn_settings = self._icon_btn('⚙', '设置 (Settings)', self.settings_requested.emit)
         self._btn_minimize = self._icon_btn('─', '最小化/展开', self._toggle_minimize)
@@ -654,8 +656,8 @@ class ResultBar(QWidget):
         self._btn_source   = self._action_btn('原文 ▼', '展开/收起原始识别文字', self._toggle_source)
         self._btn_copy_src = self._action_btn('📋 原文', '复制原始识别文字到剪贴板', self._copy_source)
         self._btn_copy_src.setText('原文')
-        self._btn_copy_src.setIcon(self._mk_icon(self._draw_copy))
-        self._btn_copy_src.setIconSize(QSize(14, 14))
+        self._btn_copy_src.setIcon(self._ph_icon('icon_copy'))
+        self._btn_copy_src.setIconSize(QSize(16, 16))
         self._lbl_backend = QLabel('')
         self._lbl_backend.setStyleSheet('color: rgba(100,200,120,180); font-size: 10px;')
         self._resize_hint_lbl = QLabel('拖拽右下角调整大小 ⋱')
@@ -675,8 +677,8 @@ class ResultBar(QWidget):
         ar.addWidget(self._btn_ai)
         self._btn_para_num = self._action_btn('[#]', '显示/隐藏段落编号', self._toggle_para_numbers)
         self._btn_para_num.setText('段落')
-        self._btn_para_num.setIcon(self._mk_icon(self._draw_paragraph))
-        self._btn_para_num.setIconSize(QSize(14, 14))
+        self._btn_para_num.setIcon(self._ph_icon('icon_paragraph'))
+        self._btn_para_num.setIconSize(QSize(16, 16))
         ar.addWidget(self._btn_para_num)
         ar.addStretch()
         ar.addWidget(self._lbl_backend)
@@ -959,6 +961,30 @@ class ResultBar(QWidget):
             return QColor(int(m.group(1)), int(m.group(2)), int(m.group(3)), a)
         return QColor(185, 192, 215, 200)
 
+    def _ph_icon(self, codepoint_key: str, size: int = None) -> QIcon:
+        """Render a Phosphor font character as a QIcon."""
+        from PyQt5.QtGui import QFont
+        s = self._skin
+        if size is None:
+            size = int(s.get('icon_size_toolbar', 16))
+        icon_font_name = s.get('icon_font', 'Phosphor')
+        char = s.get(codepoint_key, '')
+        if not char:
+            return QIcon()
+        color = self._muted_qcolor()
+        pm = QPixmap(size, size)
+        pm.fill(Qt.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setRenderHint(QPainter.TextAntialiasing)
+        font = QFont(icon_font_name)
+        font.setPixelSize(size)
+        p.setFont(font)
+        p.setPen(color)
+        p.drawText(0, 0, size, size, Qt.AlignCenter, char)
+        p.end()
+        return QIcon(pm)
+
     def _mk_icon(self, draw_fn, size: int = 14) -> QIcon:
         color = self._muted_qcolor()
         pm = QPixmap(size, size)
@@ -1126,8 +1152,8 @@ class ResultBar(QWidget):
         self._translation_busy = busy
         self._btn_stop_clear.setToolTip('停止或清空当前翻译内容')
         self._btn_stop_clear.setText('')
-        self._btn_stop_clear.setIcon(self._mk_icon(self._draw_square))
-        self._btn_stop_clear.setIconSize(QSize(14, 14))
+        self._btn_stop_clear.setIcon(self._ph_icon('icon_square'))
+        self._btn_stop_clear.setIconSize(QSize(16, 16))
         self._btn_stop_clear.setStyleSheet(self._stop_clear_btn_style(busy))
 
     # ── 语言下拉菜单 ──────────────────────────────────────────────
@@ -1484,13 +1510,13 @@ class ResultBar(QWidget):
         for btn in (self._btn_copy_trans, self._btn_history, self._btn_settings, self._btn_minimize, self._btn_close):
             btn.setStyleSheet(self._icon_btn_style())
         # 线条图标随皮肤重绘
-        self._btn_copy_trans.setIcon(self._mk_icon(self._draw_copy))
-        self._btn_copy_src.setIcon(self._mk_icon(self._draw_copy))
-        self._btn_history.setIcon(self._mk_icon(self._draw_clock, 18))
+        self._btn_copy_trans.setIcon(self._ph_icon('icon_copy'))
+        self._btn_copy_src.setIcon(self._ph_icon('icon_copy'))
+        self._btn_history.setIcon(self._ph_icon('icon_history', 18))
         self._btn_history.setIconSize(QSize(18, 18))
-        self._btn_para_num.setIcon(self._mk_icon(self._draw_paragraph))
-        self._btn_stop_clear.setIcon(self._mk_icon(self._draw_square))
-        self._btn_stop_clear.setIconSize(QSize(14, 14))
+        self._btn_para_num.setIcon(self._ph_icon('icon_paragraph'))
+        self._btn_stop_clear.setIcon(self._ph_icon('icon_square'))
+        self._btn_stop_clear.setIconSize(QSize(16, 16))
         # TranslateToggle
         self._toggle.set_skin(s)
         # SplitButton (AI科普)

@@ -50,14 +50,37 @@ prewarm()
 
 from PyQt5.QtWidgets import QApplication, QMessageBox
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QFontDatabase
 
 # Must be set BEFORE QApplication is created, otherwise has no effect
 QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
 QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
 
+_FONTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'assets', 'fonts')
+
+def _register_fonts():
+    """Register bundled font files with Qt's font database."""
+    font_files = [
+        'JetBrainsMono-Regular.ttf',
+        'Nunito-Regular.ttf',
+        'Orbitron-Regular.ttf',
+        'Phosphor.ttf',
+        'Phosphor-Light.ttf',
+        'Phosphor-Bold.ttf',
+    ]
+    for fname in font_files:
+        path = os.path.normpath(os.path.join(_FONTS_DIR, fname))
+        if os.path.exists(path):
+            fid = QFontDatabase.addApplicationFont(path)
+            if fid < 0:
+                logger.warning('字体注册失败: %s', path)
+        else:
+            logger.warning('字体文件不存在: %s', path)
+
 def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
+    _register_fonts()
 
     try:
         from core.controller import CoreController
