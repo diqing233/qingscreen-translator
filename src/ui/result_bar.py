@@ -1289,7 +1289,23 @@ class ResultBar(QWidget):
         self._toggle.setVisible(key != 'temp')
         self._refresh_toolbar_layout()
         self.box_mode_changed.emit(key)
+        if key == 'temp' and self.settings.get('temp_mode_hide_bar', True):
+            if not self.settings.get('temp_mode_hint_dismissed', False):
+                self._show_temp_mode_hint()
+            elif not self._minimized:
+                self._toggle_minimize()
         self._smart_adjust()
+
+    def _show_temp_mode_hint(self):
+        skin = get_skin(self.settings.get('skin', 'deep_space'),
+                        self.settings.get('button_style_variant', 'calm'))
+        dlg = _TempModeHintDialog(self.settings, skin, parent=self)
+        dlg.setAttribute(Qt.WA_DeleteOnClose)
+        dlg.destroyed.connect(lambda: self._toggle_minimize() if not self._minimized else None)
+        dlg.adjustSize()
+        pos = self.geometry().center() - dlg.rect().center()
+        dlg.move(pos)
+        dlg.show()
 
     def _cycle_box_mode(self):
         # AI 框模式特殊处理：点击返回到进入 AI 框之前的模式

@@ -554,3 +554,31 @@ def test_temp_mode_hint_dialog_dismiss(qtbot):
     dlg._btn_dismiss.click()
     assert not dlg.isVisible()
     settings.set.assert_called_once_with('temp_mode_hint_dismissed', True)
+
+
+def test_switching_to_temp_shows_hint_when_not_dismissed(qtbot):
+    """切换到 temp 且 hint 未 dismissed 时，应弹出提示对话框。"""
+    from unittest.mock import MagicMock, patch
+    bar = _make_bar()
+    qtbot.addWidget(bar)
+    bar.settings.set('temp_mode_hint_dismissed', False)
+    bar.settings.set('temp_mode_hide_bar', True)
+
+    with patch('ui.result_bar._TempModeHintDialog') as MockDlg:
+        instance = MagicMock()
+        MockDlg.return_value = instance
+        bar._on_mode_btn_click('temp')
+        assert MockDlg.called, "应创建 _TempModeHintDialog"
+
+
+def test_switching_to_temp_no_hint_when_dismissed(qtbot):
+    """hint 已 dismissed 时，切换到 temp 不弹提示。"""
+    from unittest.mock import patch
+    bar = _make_bar()
+    qtbot.addWidget(bar)
+    bar.settings.set('temp_mode_hint_dismissed', True)
+    bar.settings.set('temp_mode_hide_bar', True)
+
+    with patch('ui.result_bar._TempModeHintDialog') as MockDlg:
+        bar._on_mode_btn_click('temp')
+        assert not MockDlg.called
