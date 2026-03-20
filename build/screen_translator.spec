@@ -4,12 +4,15 @@ import os
 
 block_cipher = None
 
+# spec 文件在 build/ 子目录，需要用项目根目录的绝对路径
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(SPEC)))
+
 a = Analysis(
-    [os.path.join('src', 'main.py')],
-    pathex=['.', 'src'],
+    [os.path.join(_ROOT, 'src', 'main.py')],
+    pathex=[_ROOT, os.path.join(_ROOT, 'src')],
     binaries=[],
     datas=[
-        (os.path.join('assets', 'fonts'), os.path.join('assets', 'fonts')),
+        (os.path.join(_ROOT, 'assets', 'fonts'), os.path.join('assets', 'fonts')),
     ],
     hiddenimports=[
         # src 内部模块
@@ -89,7 +92,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=os.path.join('build', 'icon.ico') if sys.platform == 'win32' else None,
+    icon=os.path.join(_ROOT, 'build', 'icon.ico') if sys.platform == 'win32' else None,
 )
 
 coll = COLLECT(
@@ -107,7 +110,7 @@ if sys.platform == 'darwin':
     app = BUNDLE(
         coll,
         name='ScreenTranslator.app',
-        icon=os.path.join('build', 'icon.icns'),
+        icon=os.path.join(_ROOT, 'build', 'icon.icns'),
         bundle_identifier='com.screentranslator.app',
         info_plist={
             'CFBundleDisplayName': 'ScreenTranslator',
