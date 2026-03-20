@@ -28,7 +28,7 @@ class BoxManager(QObject):
     def _remove_box(self, box):
         bid = box.box_id
         if bid in self._boxes:
-            self._boxes[bid].hide()
+            self._boxes[bid].close()     # closeEvent → _close_all_subtitles()
             self._boxes[bid].deleteLater()
             del self._boxes[bid]
             self.box_removed.emit(bid)

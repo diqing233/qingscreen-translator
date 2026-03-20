@@ -246,7 +246,7 @@ class TranslationBox(QWidget):
         color,
         border,
         hover_background,
-        hover_color="white",
+        hover_color=None,
         pressed_background=None,
         radius=_BUTTON_RADIUS,
         padding=_BTN_PADDING,
@@ -256,6 +256,8 @@ class TranslationBox(QWidget):
         pressed_background = pressed_background or hover_background
         if font_size is None:
             font_size = int(self._skin.get('button_font_size_compact', 12))
+        if hover_color is None:
+            hover_color = self._skin.get('text', 'white')
         return f"""
             QPushButton {{
                 background: {background};
@@ -808,7 +810,15 @@ class TranslationBox(QWidget):
 
     def _on_dismiss_timeout(self):
         if self.mode == self.MODE_TEMP and not self._position_locked:
-            self.close_requested.emit(self)
+            if self.settings.get('temp_mode_hide_bar', True):
+                # 只隐藏框线；先记录当前可见的字幕窗口，hide 后重新显示
+                visible_subtitles = [w for w in self._all_subtitle_wins() if w.isVisible()]
+                self.hide()
+                for w in visible_subtitles:
+                    w.show()
+                    w.raise_()
+            else:
+                self.close_requested.emit(self)
 
     def _box_global_rect(self) -> QRect:
         return QRect(self.x(), self.y(), self.width(), self.height())

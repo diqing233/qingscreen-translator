@@ -467,3 +467,56 @@ def test_translate_and_pin_buttons_precede_subtitle_in_toolbar():
 
     assert idx_translate < idx_subtitle
     assert idx_pin < idx_subtitle
+
+
+# ── temp-mode dismiss behaviour ──────────────────────────────────────────────
+
+def test_dismiss_timeout_hides_box_but_keeps_subtitle_when_hide_bar_enabled(qtbot):
+    """hide_bar=True 时：dismiss 只隐藏框线，字幕窗口保持可见。"""
+    box, values = _make_box(temp_mode_hide_bar=True, temp_box_timeout=3)
+    qtbot.addWidget(box)
+    box.show()
+    box.set_overlay_mode('below')
+    box.show_subtitle('你好世界')
+    _app.processEvents()
+
+    assert box._subtitle_win is not None and box._subtitle_win.isVisible()
+
+    box._on_dismiss_timeout()
+    _app.processEvents()
+
+    assert not box.isVisible(), "框线应被隐藏"
+    assert box._subtitle_win is not None and box._subtitle_win.isVisible(), "字幕应保持可见"
+
+
+def test_dismiss_timeout_closes_box_normally_when_hide_bar_disabled(qtbot):
+    """hide_bar=False 时：dismiss 触发正常 close_requested 信号。"""
+    from unittest.mock import MagicMock
+    box, values = _make_box(temp_mode_hide_bar=False, temp_box_timeout=3)
+    qtbot.addWidget(box)
+    box.show()
+
+    handler = MagicMock()
+    box.close_requested.connect(handler)
+
+    box._on_dismiss_timeout()
+    _app.processEvents()
+
+    handler.assert_called_once_with(box)
+
+
+def test_close_all_subtitles_called_when_box_closed_via_close(qtbot):
+    """box.close() 时字幕窗口应被关闭（确保 clear_all 正确清理）。"""
+    box, _ = _make_box(temp_mode_hide_bar=True)
+    qtbot.addWidget(box)
+    box.show()
+    box.set_overlay_mode('below')
+    box.show_subtitle('你好世界')
+    _app.processEvents()
+
+    assert box._subtitle_win is not None and box._subtitle_win.isVisible()
+
+    box.close()
+    _app.processEvents()
+
+    assert box._subtitle_win is None, "close() 后字幕窗口应被清理"
