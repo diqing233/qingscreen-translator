@@ -582,3 +582,32 @@ def test_switching_to_temp_no_hint_when_dismissed(qtbot):
     with patch('ui.result_bar._TempModeHintDialog') as MockDlg:
         bar._on_mode_btn_click('temp')
         assert not MockDlg.called
+
+
+def test_switching_away_from_temp_closes_hint_dialog(qtbot):
+    """提示对话框显示时切换到其他模式，对话框应自动关闭。"""
+    from unittest.mock import MagicMock, patch
+    bar = _make_bar()
+    qtbot.addWidget(bar)
+    bar.settings.set('temp_mode_hint_dismissed', False)
+    bar.settings.set('temp_mode_hide_bar', True)
+
+    with patch('ui.result_bar._TempModeHintDialog') as MockDlg:
+        mock_dlg = MagicMock()
+        mock_dlg.isVisible.return_value = True
+        MockDlg.return_value = mock_dlg
+        bar._on_mode_btn_click('temp')
+
+    # 切换到多框模式
+    bar._on_mode_btn_click('multi')
+    mock_dlg.close.assert_called_once()
+
+
+def test_switching_away_does_not_close_if_hint_not_showing(qtbot):
+    """提示对话框未显示时切换模式，不应报错。"""
+    bar = _make_bar()
+    qtbot.addWidget(bar)
+    bar.settings.set('temp_mode_hint_dismissed', True)
+    bar.settings.set('temp_mode_hide_bar', True)
+    bar._on_mode_btn_click('temp')   # 无对话框（已 dismissed）
+    bar._on_mode_btn_click('multi')  # 不应抛异常

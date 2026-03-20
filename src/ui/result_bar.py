@@ -440,6 +440,7 @@ class ResultBar(QWidget):
         self._synced_source_text = ''
         self._syncing_source_editor = False
         self._minimized = False
+        self._hint_dlg = None
         self._startup_hint_checked = False
         self._drag_pos = QPoint()
         self._box_mode = 'fixed'
@@ -1286,6 +1287,9 @@ class ResultBar(QWidget):
         if key == 'ai' and self._box_mode != 'ai':
             self._prev_box_mode = self._box_mode
         self._box_mode = key
+        # 离开临时模式时，若提示对话框仍在显示则关闭
+        if key != 'temp' and self._hint_dlg is not None and self._hint_dlg.isVisible():
+            self._hint_dlg.close()
         self._set_active_mode_btn(key)
         self._toggle.setVisible(key != 'temp')
         self._refresh_toolbar_layout()
@@ -1301,8 +1305,15 @@ class ResultBar(QWidget):
         skin = get_skin(self.settings.get('skin', 'deep_space'),
                         self.settings.get('button_style_variant', 'calm'))
         dlg = _TempModeHintDialog(self.settings, skin, parent=self)
+        self._hint_dlg = dlg
         dlg.setAttribute(Qt.WA_DeleteOnClose)
-        dlg.destroyed.connect(lambda: self._toggle_minimize() if not self._minimized else None)
+
+        def _on_destroyed():
+            self._hint_dlg = None
+            if not self._minimized and self._box_mode == 'temp':
+                self._toggle_minimize()
+
+        dlg.destroyed.connect(_on_destroyed)
         dlg.adjustSize()
         pos = self.geometry().center() - dlg.rect().center()
         dlg.move(pos)
