@@ -85,7 +85,7 @@ class OnboardingWizard(QWidget):
 
         # ── 内容区（QStackedWidget）────────────────────────────────
         self._stack = QStackedWidget()
-        self._stack.setFixedHeight(180)
+        self._stack.setFixedHeight(230)
         step_widgets = self._build_step_widgets()
         for w in step_widgets:
             self._stack.addWidget(w)
@@ -239,44 +239,86 @@ class OnboardingWizard(QWidget):
         w = self._make_step_widget()
         layout = QVBoxLayout(w)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout.setSpacing(5)
 
         layout.addWidget(self._content_label('翻译后端：'))
-        layout.addSpacing(4)
 
         backends = [
-            ('Bing / Google', '免费可用，无需配置'),
-            ('百度翻译',       '需要 AppID + 密钥（免费额度充足）'),
-            ('DeepL',          '需要 API Key，翻译质量高'),
-            ('OpenAI / Claude', '需要 API Key，支持 AI 智能解释'),
+            ('Bing / Google', '免费，无需配置'),
+            ('智谱 AI',        '免费，注册即用，支持 AI 解释 ★推荐'),
+            ('百度翻译',       '需要 AppID + 密钥'),
+            ('DeepL',          '需要 API Key，质量高'),
+            ('OpenAI / Claude', '需要 API Key，AI 解释最强'),
         ]
         for name, desc in backends:
             row = QHBoxLayout()
             row.setSpacing(10)
             name_lbl = QLabel(name)
-            name_lbl.setStyleSheet(
-                f"color: {self._fg}; font-size: 11px; font-weight: bold; "
-                f"background: transparent;"
+            is_rec = '★' in desc
+            name_style = (
+                f"color: {self._acc}; font-size: 11px; font-weight: bold; background: transparent;"
+                if is_rec else
+                f"color: {self._fg}; font-size: 11px; font-weight: bold; background: transparent;"
             )
+            name_lbl.setStyleSheet(name_style)
             name_lbl.setFixedWidth(100)
-            desc_lbl = self._muted_label(desc)
+            desc_lbl = self._muted_label(desc.replace(' ★推荐', ''))
+            if is_rec:
+                desc_lbl.setStyleSheet(
+                    f"color: {self._acc}; font-size: 11px; background: transparent;"
+                )
             row.addWidget(name_lbl)
             row.addWidget(desc_lbl, 1)
             layout.addLayout(row)
 
-        layout.addSpacing(8)
+        # ── 智谱注册引导 ────────────────────────────────────────────
+        rec_box = QWidget()
+        rec_box.setStyleSheet(
+            f"background: rgba(255,255,255,8); border: 1px solid rgba(255,255,255,20); "
+            f"border-radius: 6px;"
+        )
+        rec_layout = QVBoxLayout(rec_box)
+        rec_layout.setContentsMargins(10, 7, 10, 7)
+        rec_layout.setSpacing(3)
 
-        settings_row = QHBoxLayout()
-        settings_row.addStretch()
+        rec_title = QLabel('智谱 AI 免费注册（推荐）')
+        rec_title.setStyleSheet(
+            f"color: {self._acc}; font-size: 11px; font-weight: bold; background: transparent; border: none;"
+        )
+        rec_layout.addWidget(rec_title)
+
+        steps = QLabel('① 访问 open.bigmodel.cn  ② 注册账号  ③ 进入「API Keys」创建密钥\n④ 复制 Key 填入设置 → API 密钥 → 智谱 Key')
+        steps.setStyleSheet(
+            f"color: {self._muted}; font-size: 10px; background: transparent; border: none;"
+        )
+        steps.setWordWrap(True)
+        rec_layout.addWidget(steps)
+
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(6)
+        btn_row.addStretch()
+
+        open_btn = QPushButton('打开注册页 →')
+        open_btn.setFixedHeight(22)
+        open_btn.setStyleSheet(self._nav_btn_style(primary=True))
+        open_btn.clicked.connect(self._open_zhipu_url)
+        btn_row.addWidget(open_btn)
+
         settings_btn = QPushButton('去设置 →')
-        settings_btn.setFixedHeight(26)
-        settings_btn.setStyleSheet(self._nav_btn_style(primary=True))
+        settings_btn.setFixedHeight(22)
+        settings_btn.setStyleSheet(self._nav_btn_style())
         settings_btn.clicked.connect(self.open_settings)
-        settings_row.addWidget(settings_btn)
-        layout.addLayout(settings_row)
+        btn_row.addWidget(settings_btn)
 
-        layout.addStretch()
+        rec_layout.addLayout(btn_row)
+        layout.addWidget(rec_box)
+
         return w
+
+    def _open_zhipu_url(self):
+        from PyQt5.QtGui import QDesktopServices
+        from PyQt5.QtCore import QUrl
+        QDesktopServices.openUrl(QUrl('https://open.bigmodel.cn'))
 
     def _build_step4(self) -> QWidget:
         w = self._make_step_widget()
