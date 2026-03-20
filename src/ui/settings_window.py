@@ -232,6 +232,21 @@ class SettingsWindow(QDialog):
         temp_layout.addLayout(hint_row)
 
         self._btn_reset_hint.clicked.connect(self._on_reset_hint)
+
+        onboard_row = QHBoxLayout()
+        onboard_row.setContentsMargins(20, 0, 0, 0)
+        self._btn_show_onboarding = QPushButton('再次查看新手引导')
+        self._btn_show_onboarding.setFlat(True)
+        self._btn_show_onboarding.setStyleSheet(
+            'QPushButton { color: #888; font-size: 11px; text-decoration: underline; border: none; }'
+            'QPushButton:hover { color: #aaa; }'
+        )
+        self._btn_show_onboarding.setFixedHeight(18)
+        onboard_row.addWidget(self._btn_show_onboarding)
+        onboard_row.addStretch()
+        temp_layout.addLayout(onboard_row)
+
+        self._btn_show_onboarding.clicked.connect(self._on_show_onboarding)
         gen_layout.addWidget(temp_group)
 
         # 快捷键分组（放在最下方）
@@ -771,14 +786,22 @@ class SettingsWindow(QDialog):
         if hasattr(self, '_chk_temp_hide_bar'):
             self._chk_temp_hide_bar.setChecked(True)  # temp_mode_hide_bar 默认 True
 
-        # 重置引导向导（下次启动重新显示）
-        self.settings.set('first_launch_done', False)
-
         self._sync_dict_group_visibility()
 
     def _on_reset_hint(self):
         self.settings.set('temp_mode_hint_dismissed', False)
         self._btn_reset_hint.setEnabled(False)
+
+    def _on_show_onboarding(self):
+        from ui.onboarding import OnboardingWizard
+        from PyQt5.QtWidgets import QApplication
+        from PyQt5.QtCore import Qt
+        dlg = OnboardingWizard(self.settings, parent=None)
+        dlg.setAttribute(Qt.WA_DeleteOnClose)
+        screen = QApplication.primaryScreen().availableGeometry()
+        dlg.adjustSize()
+        dlg.move(screen.center() - dlg.rect().center())
+        dlg.show()
 
     def _sync_dict_group_visibility(self):
         """根据"本地词典"是否勾选来显示/隐藏 ECDICT 分组框。"""
