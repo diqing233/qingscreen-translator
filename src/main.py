@@ -56,7 +56,9 @@ from PyQt5.QtGui import QFontDatabase
 QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
 QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
 
-_FONTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'assets', 'fonts')
+# PyInstaller 兼容：frozen 时资源在 sys._MEIPASS，开发时在项目根目录
+_BASE_DIR = sys._MEIPASS if getattr(sys, 'frozen', False) else os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+_FONTS_DIR = os.path.join(_BASE_DIR, 'assets', 'fonts')
 
 def _register_fonts():
     """Register bundled font files with Qt's font database."""

@@ -853,21 +853,22 @@ _PH = {
 
 ICON_SETS = {
     'phosphor-light': {
-        'icon_font': 'Phosphor Light',
+        'icon_font': 'Phosphor-Light',
         'icon_weight': 'light',
         'icon_size_toolbar': 16,
         'icon_size_action': 16,
         **_PH,
     },
     'phosphor-regular': {
-        'icon_font': 'Phosphor',
+        # Phosphor.ttf is corrupted; fall back to Phosphor-Light which is valid
+        'icon_font': 'Phosphor-Light',
         'icon_weight': 'regular',
         'icon_size_toolbar': 16,
         'icon_size_action': 16,
         **_PH,
     },
     'phosphor-bold': {
-        'icon_font': 'Phosphor Bold',
+        'icon_font': 'Phosphor-Bold',
         'icon_weight': 'bold',
         'icon_size_toolbar': 16,
         'icon_size_action': 16,
@@ -919,6 +920,10 @@ def get_skin(
         BUTTON_STYLE_VARIANTS[DEFAULT_BUTTON_STYLE_VARIANT],
     )
     skin.update(variant)
+    # 浅色皮肤：覆盖图标颜色为深色，确保可见性
+    if not skin.get('dark', True):
+        skin['button_icon_stroke'] = 'rgba(40,60,100,200)'
+        skin['button_icon_active_stroke'] = 'rgba(20,40,80,230)'
     return skin
 
 

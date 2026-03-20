@@ -17,13 +17,16 @@ def prewarm_ocr():
     prewarm()
 
 
-def _get_dpr() -> float:
+def _get_dpr(x: int = 0, y: int = 0) -> float:
     try:
         from PyQt5.QtWidgets import QApplication
+        from PyQt5.QtCore import QPoint
 
         app = QApplication.instance()
         if app:
-            screen = app.primaryScreen()
+            screen = app.screenAt(QPoint(x, y))
+            if screen is None:
+                screen = app.primaryScreen()
             return screen.devicePixelRatio() if screen else 1.0
     except Exception:
         pass
@@ -51,7 +54,7 @@ class OCRWorker(QThread):
             self.img_hash = self._compute_hash(img)
             if self.prev_hash is not None:
                 diff = abs(self.img_hash - self.prev_hash)
-                if diff < 3.0:
+                if diff < 8.0:
                     logger.debug(f"screen unchanged (diff={diff:.2f}), skipping OCR")
                     self.no_change.emit()
                     return
@@ -92,13 +95,16 @@ class OCRWorker(QThread):
 
     def _compute_hash(self, img) -> float:
         try:
-            return float(img[::4, ::4].mean())
+            sample = img[::4, ::4]
+            mean = float(sample.mean())
+            std = float(sample.std())
+            return mean + std * 4.0
         except Exception:
             return 0.0
 
     def _capture(self):
         r = self.region
-        dpr = _get_dpr()
+        dpr = _get_dpr(r.x(), r.y())
         left = int(r.x() * dpr)
         top = int(r.y() * dpr)
         width = max(int(r.width() * dpr), 20)

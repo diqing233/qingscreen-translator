@@ -394,7 +394,7 @@ def test_single_paragraph_translation_done_refreshes_when_all_segments_arrive():
     box = MagicMock()
     box._subtitle_mode = 'over_para'
     box._last_translation = 'full translation'
-    box._pending_paragraph_translations = [''] * 2
+    box._pending_paragraph_translations = [None] * 2
 
     CoreController._on_single_paragraph_translation_done(
         ctrl,

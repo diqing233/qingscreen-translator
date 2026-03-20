@@ -145,6 +145,7 @@ class TranslationBox(QWidget):
         self._hover_timer.setInterval(50)
         self._hover_timer.timeout.connect(self._refresh_toolbar_visibility)
 
+        self._dismiss_hiding = False
         self._resize_dir = ''
         self._resize_start_global = QPoint()
         self._resize_start_geom = QRect()
@@ -172,31 +173,39 @@ class TranslationBox(QWidget):
         btn_layout.setContentsMargins(0, 0, 0, 0)
         btn_layout.setSpacing(2)
 
-        self._btn_translate = self._make_btn("译", "立即翻译", lambda: self.translate_requested.emit(self), tone="primary")
-        self._btn_pin = self._make_btn("钉", "固定/取消固定", self._on_toggle_pin)
-        self._btn_pin.setText("")
-        self._btn_pin.setIcon(self._ph_icon('icon_pin'))
-        self._btn_pin.setIconSize(QSize(int(self._skin.get('icon_size_toolbar', 16)), int(self._skin.get('icon_size_toolbar', 16))))
-        self._btn_subtitle = self._make_btn("⊞", "覆盖翻译", self._on_toggle_subtitle)
+        self._btn_translate = self._make_btn("", "立即翻译", lambda: self.translate_requested.emit(self), tone="primary")
+        self._btn_pin = self._make_btn("", "固定/取消固定", self._on_toggle_pin)
+        self._btn_subtitle = self._make_btn("", "覆盖翻译", self._on_toggle_subtitle)
         self._btn_overlay_font_down = self._make_btn(
-            "A-",
+            "",
             "减小覆盖译文字号",
             lambda: self._adjust_overlay_font_delta(-1),
             width=24,
         )
         self._btn_overlay_font_up = self._make_btn(
-            "A+",
+            "",
             "增大覆盖译文字号",
             lambda: self._adjust_overlay_font_delta(1),
             width=24,
         )
         self._btn_overlay_close = self._make_btn(
-            "✕",
+            "",
             "关闭覆盖翻译",
             lambda: self.set_overlay_mode(self.OVERLAY_OFF),
             width=24,
             tone="danger",
         )
+        _icon_sz = QSize(int(self._skin.get('icon_size_toolbar', 16)), int(self._skin.get('icon_size_toolbar', 16)))
+        for _btn, _key in [
+            (self._btn_translate,         'icon_translate'),
+            (self._btn_pin,               'icon_pin'),
+            (self._btn_subtitle,          'icon_paragraph'),
+            (self._btn_overlay_font_down, 'icon_font_down'),
+            (self._btn_overlay_font_up,   'icon_font_up'),
+            (self._btn_overlay_close,     'icon_close'),
+        ]:
+            _btn.setIcon(self._ph_icon(_key))
+            _btn.setIconSize(_icon_sz)
 
         for btn in [
             self._btn_translate,
@@ -223,8 +232,13 @@ class TranslationBox(QWidget):
         corner_layout.setContentsMargins(0, 0, 0, 0)
         corner_layout.setSpacing(2)
 
-        self._btn_hide = self._make_btn("隐", "隐藏", self.hide)
-        self._btn_close = self._make_btn("✕", "关闭", lambda: self.close_requested.emit(self), tone="danger")
+        self._btn_hide = self._make_btn("", "隐藏", self.hide)
+        self._btn_close = self._make_btn("", "关闭", lambda: self.close_requested.emit(self), tone="danger")
+        _icon_sz = QSize(int(self._skin.get('icon_size_toolbar', 16)), int(self._skin.get('icon_size_toolbar', 16)))
+        self._btn_hide.setIcon(self._ph_icon('icon_collapse'))
+        self._btn_hide.setIconSize(_icon_sz)
+        self._btn_close.setIcon(self._ph_icon('icon_close'))
+        self._btn_close.setIconSize(_icon_sz)
 
         corner_layout.addWidget(self._btn_hide)
         corner_layout.addWidget(self._btn_close)
@@ -236,6 +250,7 @@ class TranslationBox(QWidget):
             f"color: {self._skin.get('text_ocr', 'rgba(220,220,220,160)')}; font-size: 10px;"
         )
         self._ocr_label.setWordWrap(True)
+        self._ocr_label.setVisible(False)
         layout.addWidget(self._ocr_label)
         layout.addStretch()
 
@@ -258,6 +273,12 @@ class TranslationBox(QWidget):
             font_size = int(self._skin.get('button_font_size_compact', 12))
         if hover_color is None:
             hover_color = self._skin.get('text', 'white')
+        # Boost border opacity so buttons stand out on any background
+        m = re.match(r'rgba?\s*\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)(?:[,\s]+(\d+))?\s*\)', border)
+        if m:
+            r_, g_, b_ = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            a_ = max(int(m.group(4)) if m.group(4) else 255, 90)
+            border = f'rgba({r_},{g_},{b_},{a_})'
         return f"""
             QPushButton {{
                 background: {background};
@@ -685,7 +706,11 @@ class TranslationBox(QWidget):
         self._btn_overlay_font_up.setVisible(overlay_active)
         self._btn_overlay_close.setVisible(overlay_active)
 
-        self._apply_button_style(self._btn_subtitle, active=self._subtitle_mode != self.OVERLAY_OFF)
+        active = self._subtitle_mode != self.OVERLAY_OFF
+        self._apply_button_style(self._btn_subtitle, active=active)
+        icon_sz = int(self._skin.get('icon_size_toolbar', 16))
+        self._btn_subtitle.setIcon(self._ph_icon('icon_paragraph', active=active))
+        self._btn_subtitle.setIconSize(QSize(icon_sz, icon_sz))
 
     def _update_pin_button(self):
         icon_size = int(self._skin.get('icon_size_toolbar', 16))
@@ -750,6 +775,18 @@ class TranslationBox(QWidget):
         self._apply_button_style(self._btn_translate, tone='primary')
         self._update_pin_button()
         self._update_subtitle_button()
+        # 刷新其余图标按钮
+        _icon_sz = QSize(int(self._skin.get('icon_size_toolbar', 16)), int(self._skin.get('icon_size_toolbar', 16)))
+        for _btn, _key in [
+            (self._btn_translate,         'icon_translate'),
+            (self._btn_overlay_font_down, 'icon_font_down'),
+            (self._btn_overlay_font_up,   'icon_font_up'),
+            (self._btn_overlay_close,     'icon_close'),
+            (self._btn_hide,              'icon_collapse'),
+            (self._btn_close,             'icon_close'),
+        ]:
+            _btn.setIcon(self._ph_icon(_key))
+            _btn.setIconSize(_icon_sz)
         # OCR 标签
         self._ocr_label.setStyleSheet(
             f"color: {s.get('text_ocr', 'rgba(220,220,220,160)')}; font-size: 10px;"
@@ -773,8 +810,10 @@ class TranslationBox(QWidget):
 
     def start_dismiss_timer(self):
         if self.mode == self.MODE_TEMP and not self._position_locked:
-            ms = self.settings.get("temp_box_timeout", 3) * 1000
-            self._dismiss_timer.start(ms)
+            timeout = self.settings.get("temp_box_timeout", 0)
+            if timeout <= 0:
+                return  # 0 = 不自动消失
+            self._dismiss_timer.start(timeout * 1000)
 
     def start_auto_translate(self):
         ms = self.settings.get("auto_translate_interval", 2) * 1000
@@ -811,12 +850,10 @@ class TranslationBox(QWidget):
     def _on_dismiss_timeout(self):
         if self.mode == self.MODE_TEMP and not self._position_locked:
             if self.settings.get('temp_mode_hide_bar', True):
-                # 只隐藏框线；先记录当前可见的字幕窗口，hide 后重新显示
-                visible_subtitles = [w for w in self._all_subtitle_wins() if w.isVisible()]
+                # 只隐藏框线，字幕保持可见；用标志阻止 hideEvent 顺带隐藏字幕
+                self._dismiss_hiding = True
                 self.hide()
-                for w in visible_subtitles:
-                    w.show()
-                    w.raise_()
+                self._dismiss_hiding = False
             else:
                 self.close_requested.emit(self)
 
@@ -873,6 +910,8 @@ class TranslationBox(QWidget):
         self.region = geom
 
     def enterEvent(self, event):
+        if not self.isVisible():
+            return
         self.raise_()
         self._refresh_toolbar_visibility()
 
@@ -950,7 +989,8 @@ class TranslationBox(QWidget):
         self._hover_timer.stop()
         self._btn_bar.setVisible(False)
         self._corner_bar.setVisible(False)
-        self._hide_all_subtitles()
+        if not self._dismiss_hiding:
+            self._hide_all_subtitles()
 
     def showEvent(self, event):
         super().showEvent(event)

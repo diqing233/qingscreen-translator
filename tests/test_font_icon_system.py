@@ -59,7 +59,7 @@ def test_icon_set_has_required_tokens():
 
 def test_icon_set_composition_adds_tokens():
     skin = theme.get_skin('matrix', icon_set='phosphor-bold')
-    assert skin['icon_font'] == 'Phosphor Bold'
+    assert skin['icon_font'] == 'Phosphor-Bold'
     assert skin['icon_weight'] == 'bold'
     assert 'icon_copy' in skin
 
@@ -127,7 +127,7 @@ def test_get_skin_layer_order():
     """icon_set 层应覆盖 font_set 层，button_style_variant 层最后。"""
     skin = theme.get_skin('deep_space', 'calm', font_set='mono', icon_set='phosphor-bold')
     assert 'JetBrains Mono' in skin['font_family']
-    assert skin['icon_font'] == 'Phosphor Bold'
+    assert skin['icon_font'] == 'Phosphor-Bold'
     assert skin['button_style_variant'] == 'calm'
 
 
@@ -138,7 +138,7 @@ def test_get_skin_font_set_none_uses_skin_default():
 
 def test_get_skin_icon_set_none_uses_skin_default():
     skin = theme.get_skin('ink', icon_set=None)
-    assert skin['icon_font'] == 'Phosphor Light'
+    assert skin['icon_font'] == 'Phosphor-Light'
 
 
 def test_get_skin_does_not_mutate_skins_dict():

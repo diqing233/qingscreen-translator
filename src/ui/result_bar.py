@@ -127,7 +127,8 @@ class _TempModeHintDialog(QWidget):
         body = QLabel(
             '翻译条将自动最小化，翻译结果会直接\n'
             '显示在选区框下方。\n\n'
-            '按 Alt+Q 框选并翻译。'
+            '按 Alt+Q 框选并翻译。\n'
+            '按 Alt+W 隐藏或显示翻译框。'
         )
         body.setStyleSheet(f"color: {fg}; font-size: 12px; background: transparent;")
         layout.addWidget(body)
@@ -605,7 +606,7 @@ class ResultBar(QWidget):
 
         # 复制译文（工具栏快捷区）
         self._btn_copy_trans = self._icon_btn('', '复制译文到剪贴板', self._copy)
-        self._btn_copy_trans.setIcon(self._ph_icon('icon_copy'))
+        self._btn_copy_trans.setIcon(self._mk_icon(self._draw_copy))
         self._btn_copy_trans.setIconSize(QSize(16, 16))
         tb.addWidget(self._btn_copy_trans)
 
@@ -640,7 +641,7 @@ class ResultBar(QWidget):
 
         # 右侧图标按钮（固定在滚动区外，不随工具栏内容滚动）
         self._btn_history  = self._icon_btn('', '翻译历史 (History)', self.history_requested.emit)
-        self._btn_history.setIcon(self._ph_icon('icon_history', 18))
+        self._btn_history.setIcon(self._mk_icon(self._draw_clock, 18))
         self._btn_history.setIconSize(QSize(18, 18))
         self._btn_settings = self._icon_btn('⚙', '设置 (Settings)', self.settings_requested.emit)
         self._btn_minimize = self._icon_btn('─', '最小化/展开', self._toggle_minimize)
@@ -722,7 +723,7 @@ class ResultBar(QWidget):
         self._btn_source   = self._action_btn('原文 ▼', '展开/收起原始识别文字', self._toggle_source)
         self._btn_copy_src = self._action_btn('📋 原文', '复制原始识别文字到剪贴板', self._copy_source)
         self._btn_copy_src.setText('原文')
-        self._btn_copy_src.setIcon(self._ph_icon('icon_copy'))
+        self._btn_copy_src.setIcon(self._mk_icon(self._draw_copy))
         self._btn_copy_src.setIconSize(QSize(16, 16))
         self._lbl_backend = QLabel('')
         self._lbl_backend.setStyleSheet('color: rgba(100,200,120,180); font-size: 10px;')
@@ -743,7 +744,7 @@ class ResultBar(QWidget):
         ar.addWidget(self._btn_ai)
         self._btn_para_num = self._action_btn('[#]', '显示/隐藏段落编号', self._toggle_para_numbers)
         self._btn_para_num.setText('段落')
-        self._btn_para_num.setIcon(self._ph_icon('icon_paragraph'))
+        self._btn_para_num.setIcon(self._mk_icon(self._draw_paragraph, 16))
         self._btn_para_num.setIconSize(QSize(16, 16))
         ar.addWidget(self._btn_para_num)
         ar.addStretch()
@@ -822,7 +823,7 @@ class ResultBar(QWidget):
         hover_color: str = None,
         pressed_background: str = None,
         disabled_background: str = None,
-        disabled_color: str = 'rgba(170,174,190,130)',
+        disabled_color: str = None,
         radius: int = _BUTTON_RADIUS,
         padding: str = '0 8px',
         font_size: int = 12,
@@ -832,6 +833,16 @@ class ResultBar(QWidget):
             hover_color = self._skin.get('text', 'white')
         pressed_background = pressed_background or hover_background
         disabled_background = disabled_background or background
+        if disabled_color is None:
+            # Use theme-specific disabled color; ensure alpha >= 170 for readability
+            s = self._skin
+            raw = s.get('btn_disabled_fg', '')
+            if raw:
+                disabled_color = raw
+            elif s.get('dark', True):
+                disabled_color = 'rgba(160,164,180,180)'
+            else:
+                disabled_color = 'rgba(90,100,120,170)'
         return f'''
             QPushButton {{
                 background: {background};
@@ -853,7 +864,7 @@ class ResultBar(QWidget):
             QPushButton:disabled {{
                 background: {disabled_background};
                 color: {disabled_color};
-                border: 1px solid rgba(255,255,255,10);
+                border: 1px solid rgba(128,128,128,20);
             }}
         '''
 
@@ -1117,12 +1128,19 @@ class ResultBar(QWidget):
 
     @staticmethod
     def _draw_paragraph(p: QPainter, s: int):
-        line_x = int(s * 0.18)
-        line_w = int(s * 0.52)
-        for idx, y in enumerate((0.20, 0.44, 0.68)):
-            p.drawLine(line_x, int(s * y), line_x + line_w, int(s * y))
-            if idx < 2:
-                p.drawLine(int(s * 0.82), int(s * y), int(s * 0.92), int(s * y))
+        dot_r = max(2, int(s * 0.10))
+        dot_cx = int(s * 0.16)
+        line_x0 = int(s * 0.30)
+        line_x1 = int(s * 0.84)
+        old_brush = p.brush()
+        p.setBrush(p.pen().color())
+        for y_ratio in (0.22, 0.50, 0.78):
+            cy = int(s * y_ratio)
+            p.drawEllipse(dot_cx - dot_r, cy - dot_r, dot_r * 2, dot_r * 2)
+        p.setBrush(old_brush)
+        for y_ratio in (0.22, 0.50, 0.78):
+            cy = int(s * y_ratio)
+            p.drawLine(line_x0, cy, line_x1, cy)
 
     def _tb_scroll_style(self) -> str:
         s = self._skin
@@ -1223,7 +1241,7 @@ class ResultBar(QWidget):
         self._translation_busy = busy
         self._btn_stop_clear.setToolTip('停止或清空当前翻译内容')
         self._btn_stop_clear.setText('')
-        self._btn_stop_clear.setIcon(self._ph_icon('icon_square'))
+        self._btn_stop_clear.setIcon(self._mk_icon(self._draw_square))
         self._btn_stop_clear.setIconSize(QSize(16, 16))
         self._btn_stop_clear.setStyleSheet(self._stop_clear_btn_style(busy))
 
@@ -1547,7 +1565,19 @@ class ResultBar(QWidget):
             self._manual_size = True
             self._save_timer.start()
             # 重新分配：翻译/原文贴内容，AI 科普填充剩余
-            self._apply_splitter_sizes()
+            if self._explain_expanded and self._panel_in_content_splitter(self._explain_panel):
+                t_h = max(72, self._preferred_translation_panel_height())
+                s_in = self._panel_in_content_splitter(self._source_panel)
+                s_h = max(96, self._preferred_source_panel_height()) if s_in else 0
+                handle_h = (self._content_splitter.count() - 1) * self._content_splitter.handleWidth()
+                e_h = max(96, self._content_splitter.height() - handle_h - t_h - s_h)
+                self._apply_splitter_sizes(
+                    translation_height=t_h,
+                    source_height=s_h,
+                    explain_height=e_h,
+                )
+            else:
+                self._apply_splitter_sizes()
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -1560,8 +1590,8 @@ class ResultBar(QWidget):
         if not self._startup_hint_checked:
             self._startup_hint_checked = True
             if (self._box_mode == 'temp'
-                    and self._settings.get('temp_mode_hide_bar', True)
-                    and not self._settings.get('temp_mode_hint_dismissed', False)):
+                    and self.settings.get('temp_mode_hide_bar', True)
+                    and not self.settings.get('temp_mode_hint_dismissed', False)):
                 QTimer.singleShot(300, self._show_temp_mode_hint)
 
     def enterEvent(self, event):
@@ -1613,12 +1643,12 @@ class ResultBar(QWidget):
         for btn in (self._btn_copy_trans, self._btn_history, self._btn_settings, self._btn_minimize, self._btn_close):
             btn.setStyleSheet(self._icon_btn_style())
         # 线条图标随皮肤重绘
-        self._btn_copy_trans.setIcon(self._ph_icon('icon_copy'))
-        self._btn_copy_src.setIcon(self._ph_icon('icon_copy'))
-        self._btn_history.setIcon(self._ph_icon('icon_history', 18))
+        self._btn_copy_trans.setIcon(self._mk_icon(self._draw_copy))
+        self._btn_copy_src.setIcon(self._mk_icon(self._draw_copy))
+        self._btn_history.setIcon(self._mk_icon(self._draw_clock, 18))
         self._btn_history.setIconSize(QSize(18, 18))
-        self._btn_para_num.setIcon(self._ph_icon('icon_paragraph'))
-        self._btn_stop_clear.setIcon(self._ph_icon('icon_square'))
+        self._btn_para_num.setIcon(self._mk_icon(self._draw_paragraph, 16))
+        self._btn_stop_clear.setIcon(self._mk_icon(self._draw_square))
         self._btn_stop_clear.setIconSize(QSize(16, 16))
         # TranslateToggle
         self._toggle.set_skin(s)
@@ -1632,28 +1662,8 @@ class ResultBar(QWidget):
         muted = s.get('text_muted', 'rgba(160,160,185,190)')
         self._resize_hint_lbl.setStyleSheet(f'color: {muted}; font-size: 10px; padding: 0;')
 
-    def apply_settings(self):
-        """设置保存后立刻应用位置和大小。"""
-        size_pref = self.settings.get('result_bar_size', 'default')
-        if size_pref == 'default':
-            self._manual_size = False
-            self.resize(DEFAULT_W, DEFAULT_H)
-            self._manual_size = True
-        self.set_overlay_mode(self.settings.get('overlay_default_mode', 'off'))
-        self._position_window()
-
     def mark_hidden_to_tray(self, hidden: bool):
         self._hidden_to_tray = hidden
-
-    def update_mode_tooltips(self, hk_temp: str, hk_fixed: str, hk_multi: str, hk_ai: str = 'alt+4'):
-        hints = {
-            'temp':  f'临时翻译：框选后立即翻译，N秒后消失  [{hk_temp}]',
-            'fixed': f'固定翻译：框保留，可手动或自动翻译  [{hk_fixed}]',
-            'multi': f'多框翻译：可放置多个翻译框  [{hk_multi}]',
-            'ai':    f'AI框选：框选后直接AI科普，无需翻译  [{hk_ai}]',
-        }
-        for key, btn in self._mode_btns.items():
-            btn.setToolTip(hints.get(key, ''))
 
     def show_multi_results(self, results: list):
         """多框模式：把各框译文合并展示，用分隔线隔开。"""
@@ -1671,19 +1681,6 @@ class ResultBar(QWidget):
         self._lbl_backend.setText('')
         if not self.isVisible() and not self._hidden_to_tray and not self._minimized:
             self.show()
-        self._smart_adjust()
-
-    def show_explain_loading(self):
-        """AI科普加载中：在原文按钮下方显示提示，不覆盖译文区。"""
-        self._lbl_explain_loading.setVisible(True)
-        self._smart_adjust()
-
-    def show_explain(self, text: str):
-        self._lbl_explain_loading.setVisible(False)
-        self._lbl_explain.setPlainText(text)
-        self._lbl_explain.setVisible(True)
-        self._btn_explain_hdr.setText('💡 AI科普 ▲')
-        self._btn_explain_hdr.setVisible(True)
         self._smart_adjust()
 
     def show_ocr_text(self, text: str):
@@ -1705,25 +1702,9 @@ class ResultBar(QWidget):
 
     # ── private slots ─────────────────────────────────────────────
 
-    def _toggle_source(self):
-        self._source_expanded = not self._source_expanded
-        self._lbl_source.setVisible(self._source_expanded)
-        self._btn_source.setText('原文 ▲' if self._source_expanded else '原文 ▼')
-        self._smart_adjust()
-
-    def _toggle_explain_section(self):
-        vis = not self._lbl_explain.isVisible()
-        self._lbl_explain.setVisible(vis)
-        self._btn_explain_hdr.setText('💡 AI科普 ▲' if vis else '💡 AI科普 ▼')
-        self._smart_adjust()
-
     def _copy(self):
         if self._current_result:
             QApplication.clipboard().setText(self._current_result.get('translated', ''))
-
-    def _copy_source(self):
-        if self._current_result:
-            QApplication.clipboard().setText(self._current_result.get('original', ''))
 
     def _reset_size(self):
         self._manual_size = False
@@ -1871,8 +1852,30 @@ class ResultBar(QWidget):
     def _toggle_para_numbers(self):
         self._show_para_numbers = not self._show_para_numbers
         self._btn_para_num.setStyleSheet(self._action_btn_style(self._show_para_numbers))
-        if self._current_result:
+        if not self._current_result:
+            return
+        if self._explain_expanded:
+            # AI 科普展开中：只刷新译文标签，不关闭 AI 面板
+            self._refresh_translation_labels(self._current_result)
+        else:
             self.show_result(self._current_result)
+
+    def _refresh_translation_labels(self, result: dict):
+        """仅刷新译文/原文标签，不影响 AI 科普面板。"""
+        paras = result.get('paragraphs', [])
+        if self._para_mode and paras:
+            self._lbl_translation.setPlainText(self._format_para_text(paras, 'translation'))
+            if not self._source_dirty or not self.current_source_text():
+                self._set_source_text(self._format_para_text(paras, 'text'), mark_clean=True)
+        elif paras:
+            self._lbl_translation.setPlainText('\n'.join(p['translation'] for p in paras))
+            if not self._source_dirty or not self.current_source_text():
+                self._set_source_text('\n'.join(p['text'] for p in paras), mark_clean=True)
+        else:
+            self._lbl_translation.setPlainText(result.get('translated', ''))
+            if not self._source_dirty or not self.current_source_text():
+                self._set_source_text(result.get('original', ''), mark_clean=True)
+        self._update_translation_height()
 
     def sync_para_mode_from_settings(self):
         self._para_mode = bool(self.settings.get('para_split_enabled', False))

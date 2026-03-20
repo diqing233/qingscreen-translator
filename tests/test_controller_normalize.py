@@ -172,7 +172,7 @@ def test_temp_hide_bar_routes_to_subtitle(qtbot):
 
 
 def test_temp_hide_bar_no_box_silent(qtbot):
-    """临时模式 + temp_mode_hide_bar=True + box=None 时，静默跳过。"""
+    """临时模式 + temp_mode_hide_bar=True + box=None 时，回退到 result_bar 显示。"""
     from unittest.mock import MagicMock
     from core.controller import CoreController
 
@@ -192,4 +192,4 @@ def test_temp_hide_bar_no_box_silent(qtbot):
     result = {'translated': '你好', 'original': 'hello', 'paragraphs': []}
     ctrl._dispatch_translation_result(result, None)
 
-    mock_bar.show_result.assert_not_called()
+    mock_bar.show_result.assert_called_once_with(result)

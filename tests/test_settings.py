@@ -13,7 +13,7 @@ def make_store():
 
 def test_default_values():
     store = make_store()
-    assert store.get('temp_box_timeout') == 3
+    assert store.get('temp_box_timeout') == 0
     assert store.get('auto_translate_interval') == 2
     assert store.get('target_language') == 'zh-CN'
     assert store.get('hotkey_select') == 'alt+q'
