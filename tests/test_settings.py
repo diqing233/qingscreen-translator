@@ -175,3 +175,14 @@ def test_skin_kawaii_persists():
     store.set('skin', 'kawaii')
     store2 = SettingsStore(f.name)
     assert store2.get('skin') == 'kawaii'
+
+
+def test_settings_window_has_temp_hide_bar_checkbox():
+    """设置窗口通用标签页应包含 temp_mode_hide_bar 复选框。"""
+    from PyQt5.QtWidgets import QCheckBox
+    from ui.settings_window import SettingsWindow
+    store = make_store()
+    win = SettingsWindow(store)
+    assert hasattr(win, '_chk_temp_hide_bar'), "应有 _chk_temp_hide_bar 属性"
+    assert isinstance(win._chk_temp_hide_bar, QCheckBox)
+    win.close()

@@ -109,6 +109,7 @@ class SettingsWindow(QDialog):
         self.settings = settings
         self.setWindowTitle('ScreenTranslator - 设置')
         self.setMinimumWidth(520)
+        self.resize(560, 640)
         self.setWindowFlags(
             self.windowFlags() & ~Qt.WindowContextHelpButtonHint
             | Qt.WindowStaysOnTopHint
@@ -195,6 +196,31 @@ class SettingsWindow(QDialog):
 
         gen_layout.addWidget(form_widget)
 
+        # 临时模式行为分组
+        temp_group = QGroupBox('临时模式')
+        temp_layout = QVBoxLayout(temp_group)
+        temp_layout.setSpacing(6)
+
+        self._chk_temp_hide_bar = QCheckBox('临时模式下隐藏翻译条（翻译结果显示在选区框下方）')
+        temp_layout.addWidget(self._chk_temp_hide_bar)
+
+        hint_row = QHBoxLayout()
+        hint_row.setContentsMargins(20, 0, 0, 0)
+        self._btn_reset_hint = QPushButton('重置提示')
+        self._btn_reset_hint.setFlat(True)
+        self._btn_reset_hint.setStyleSheet(
+            'QPushButton { color: #888; font-size: 11px; text-decoration: underline; border: none; }'
+            'QPushButton:hover { color: #aaa; }'
+            'QPushButton:disabled { color: #555; text-decoration: none; }'
+        )
+        self._btn_reset_hint.setFixedHeight(18)
+        hint_row.addWidget(self._btn_reset_hint)
+        hint_row.addStretch()
+        temp_layout.addLayout(hint_row)
+
+        self._btn_reset_hint.clicked.connect(self._on_reset_hint)
+        gen_layout.addWidget(temp_group)
+
         # 快捷键分组（放在最下方）
         hotkey_group = QGroupBox('快捷键')
         hotkey_form = QFormLayout(hotkey_group)
@@ -230,7 +256,12 @@ class SettingsWindow(QDialog):
 
         gen_layout.addWidget(hotkey_group)
 
-        tabs.addTab(gen, '通用')
+        gen_scroll = QScrollArea()
+        gen_scroll.setWidget(gen)
+        gen_scroll.setWidgetResizable(True)
+        gen_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        gen_scroll.setFrameShape(QFrame.NoFrame)
+        tabs.addTab(gen_scroll, '通用')
 
         # ── 翻译来源 ──────────────────────────────────────────
         src_tab = QWidget()
@@ -378,7 +409,12 @@ class SettingsWindow(QDialog):
 
             key_form.addRow(label, row_widget)
 
-        tabs.addTab(key_tab, 'API 密钥')
+        key_scroll = QScrollArea()
+        key_scroll.setWidget(key_tab)
+        key_scroll.setWidgetResizable(True)
+        key_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        key_scroll.setFrameShape(QFrame.NoFrame)
+        tabs.addTab(key_scroll, 'API 密钥')
 
         # ── 外观（皮肤选择）────────────────────────────────────────
         skin_tab = QWidget()
@@ -403,13 +439,13 @@ class SettingsWindow(QDialog):
             grid.addWidget(card, idx // 3, idx % 3)
         skin_v.addWidget(grid_widget)
 
-        variant_group = QGroupBox('Button Style')
+        variant_group = QGroupBox('按钮风格')
         variant_layout = QVBoxLayout(variant_group)
         variant_layout.setContentsMargins(10, 10, 10, 10)
         variant_layout.setSpacing(6)
 
         variant_help = QLabel(
-            'Skin controls the overall palette. Button style controls emphasis, typography, and icons.'
+            '皮肤控制整体配色。按钮风格控制强调色、字体和图标。'
         )
         variant_help.setWordWrap(True)
         variant_help.setStyleSheet('color: #888; font-size: 11px;')
@@ -418,8 +454,8 @@ class SettingsWindow(QDialog):
         self._button_style_variant_group = QButtonGroup(self)
         self._button_style_variant_buttons: dict[str, QRadioButton] = {}
         for variant_id, label in (
-            ('calm', 'A - Calm Hierarchy'),
-            ('semantic', 'B - Functional Color'),
+            ('calm', 'A - 平静层次'),
+            ('semantic', 'B - 功能色彩'),
         ):
             button = QRadioButton(label)
             self._button_style_variant_group.addButton(button)
@@ -470,7 +506,12 @@ class SettingsWindow(QDialog):
 
         skin_v.addStretch()
 
-        tabs.addTab(skin_tab, '外观')
+        skin_scroll = QScrollArea()
+        skin_scroll.setWidget(skin_tab)
+        skin_scroll.setWidgetResizable(True)
+        skin_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        skin_scroll.setFrameShape(QFrame.NoFrame)
+        tabs.addTab(skin_scroll, '外观')
         layout.addWidget(tabs)
 
         # 按钮行
@@ -550,6 +591,13 @@ class SettingsWindow(QDialog):
         self._para_check.setChecked(bool(self.settings.get('para_split_enabled', True)))
         self._para_ratio_spin.setValue(float(self.settings.get('para_gap_ratio', 0.5)))
         self._para_ratio_spin.setEnabled(self._para_check.isChecked())
+
+        self._chk_temp_hide_bar.setChecked(self.settings.get('temp_mode_hide_bar', True))
+        dismissed = self.settings.get('temp_mode_hint_dismissed', False)
+        self._btn_reset_hint.setEnabled(dismissed)
+        self._chk_temp_hide_bar.stateChanged.connect(
+            lambda state: self.settings.set('temp_mode_hide_bar', bool(state))
+        )
 
         self._refresh_dict_status()
         self._sync_dict_group_visibility()
@@ -697,6 +745,10 @@ class SettingsWindow(QDialog):
         self._combo_icon_set.setCurrentIndex(0)
 
         self._sync_dict_group_visibility()
+
+    def _on_reset_hint(self):
+        self.settings.set('temp_mode_hint_dismissed', False)
+        self._btn_reset_hint.setEnabled(False)
 
     def _sync_dict_group_visibility(self):
         """根据"本地词典"是否勾选来显示/隐藏 ECDICT 分组框。"""
