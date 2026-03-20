@@ -1669,7 +1669,7 @@ class ResultBar(QWidget):
             parts.append(f'[{i}] {trans}  \u3000{backend}')
         self._lbl_translation.setPlainText('\n─────\n'.join(parts))
         self._lbl_backend.setText('')
-        if not self.isVisible() and not self._hidden_to_tray:
+        if not self.isVisible() and not self._hidden_to_tray and not self._minimized:
             self.show()
         self._smart_adjust()
 
@@ -1695,12 +1695,12 @@ class ResultBar(QWidget):
         self._update_translation_height()
         self._lbl_backend.setText('')
         self._apply_splitter_sizes()
-        if not self.isVisible() and not self._hidden_to_tray:
+        if not self.isVisible() and not self._hidden_to_tray and not self._minimized:
             self.show()
 
     def show_error(self, msg: str):
         self._lbl_translation.setPlainText(f'⚠ {msg}')
-        if not self.isVisible() and not self._hidden_to_tray:
+        if not self.isVisible() and not self._hidden_to_tray and not self._minimized:
             self.show()
 
     # ── private slots ─────────────────────────────────────────────
@@ -1841,7 +1841,7 @@ class ResultBar(QWidget):
             self._btn_src_lang.setText(f'{src_short} ▾')
             self._refresh_toolbar_layout()
 
-        if not self.isVisible() and not self._hidden_to_tray:
+        if not self.isVisible() and not self._hidden_to_tray and not self._minimized:
             self.show()
         self._smart_adjust()
 

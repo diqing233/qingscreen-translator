@@ -611,3 +611,39 @@ def test_switching_away_does_not_close_if_hint_not_showing(qtbot):
     bar.settings.set('temp_mode_hide_bar', True)
     bar._on_mode_btn_click('temp')   # 无对话框（已 dismissed）
     bar._on_mode_btn_click('multi')  # 不应抛异常
+
+
+def test_show_loading_does_not_restore_minimized_bar(qtbot):
+    """最小化状态下调用 show_loading 不应重新显示翻译条。"""
+    bar = _make_bar()
+    qtbot.addWidget(bar)
+    bar._minimized = True
+    bar.hide()
+    _app.processEvents()
+    bar.show_loading('识别中...')
+    _app.processEvents()
+    assert not bar.isVisible()
+
+
+def test_show_result_does_not_restore_minimized_bar(qtbot):
+    """最小化状态下调用 show_result 不应重新显示翻译条。"""
+    bar = _make_bar()
+    qtbot.addWidget(bar)
+    bar._minimized = True
+    bar.hide()
+    _app.processEvents()
+    bar.show_result({'translated': '你好', 'original': 'hello', 'paragraphs': []})
+    _app.processEvents()
+    assert not bar.isVisible()
+
+
+def test_show_error_does_not_restore_minimized_bar(qtbot):
+    """最小化状态下调用 show_error 不应重新显示翻译条。"""
+    bar = _make_bar()
+    qtbot.addWidget(bar)
+    bar._minimized = True
+    bar.hide()
+    _app.processEvents()
+    bar.show_error('OCR 失败')
+    _app.processEvents()
+    assert not bar.isVisible()
