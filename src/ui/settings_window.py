@@ -9,8 +9,13 @@ from PyQt5.QtCore import pyqtSignal, Qt
 from PyQt5.QtGui import QColor, QPainter, QPen
 from ui.theme import SKINS, list_skins, FONT_SETS, ICON_SETS
 
-BACKEND_LABELS = {
-    'dictionary':   '📖 本地词典（离线极快）',
+def _no_wheel(widget):
+    """禁止鼠标滚轮修改控件值。"""
+    widget.wheelEvent = lambda e: e.ignore()
+    return widget
+
+
+BACKEND_LABELS = {    'dictionary':   '📖 本地词典（离线极快）',
     'bing':         '🔷 微软 Bing 翻译（免费，部分网络需梯子）',
     'google':       '🌐 谷歌翻译（免费，需梯子）',
     'baidu':        '🔵 百度翻译',
@@ -133,22 +138,30 @@ class SettingsWindow(QDialog):
         form = QFormLayout(form_widget)
         form.setSpacing(8)
 
-        self._spin_timeout = QSpinBox()
-        self._spin_timeout.setRange(1, 60)
-        form.addRow('临时框消失时间（秒）', self._spin_timeout)
+        self._chk_auto_dismiss = QCheckBox('临时框自动消失')
+        form.addRow(self._chk_auto_dismiss)
 
-        self._spin_interval = QSpinBox()
+        self._spin_timeout = _no_wheel(QSpinBox())
+        self._spin_timeout.setRange(1, 60)
+        self._spin_timeout.setSuffix(' 秒')
+        form.addRow('    消失时间', self._spin_timeout)
+
+        self._chk_auto_dismiss.stateChanged.connect(
+            lambda state: self._spin_timeout.setEnabled(bool(state))
+        )
+
+        self._spin_interval = _no_wheel(QSpinBox())
         self._spin_interval.setRange(1, 120)
         form.addRow('固定框自动翻译间隔（秒）', self._spin_interval)
 
-        self._combo_target = QComboBox()
+        self._combo_target = _no_wheel(QComboBox())
         for code, name in [('zh-CN', '简体中文'), ('zh-TW', '繁体中文'), ('en', '英语'),
                            ('ja', '日语'), ('ko', '韩语'), ('fr', '法语'),
                            ('de', '德语'), ('es', '西班牙语'), ('ru', '俄语')]:
             self._combo_target.addItem(name, code)
         form.addRow('默认翻译目标语言', self._combo_target)
 
-        self._combo_pos = QComboBox()
+        self._combo_pos = _no_wheel(QComboBox())
         self._combo_pos.addItem('中央', 'center')
         self._combo_pos.addItem('顶部', 'top')
         self._combo_pos.addItem('底部', 'bottom')
@@ -157,32 +170,32 @@ class SettingsWindow(QDialog):
         self._combo_pos.addItem('上次位置', 'last')
         form.addRow('结果条位置', self._combo_pos)
 
-        self._combo_size = QComboBox()
+        self._combo_size = _no_wheel(QComboBox())
         self._combo_size.addItem('默认大小', 'default')
         self._combo_size.addItem('上次大小', 'last')
         form.addRow('结果条大小', self._combo_size)
 
-        self._combo_close_behavior = QComboBox()
+        self._combo_close_behavior = _no_wheel(QComboBox())
         self._combo_close_behavior.addItem('每次询问', 'ask')
         self._combo_close_behavior.addItem('最小化到托盘', 'tray')
         self._combo_close_behavior.addItem('直接退出程序', 'quit')
         form.addRow('关闭按钮行为', self._combo_close_behavior)
 
-        self._combo_overlay_default_mode = QComboBox()
+        self._combo_overlay_default_mode = _no_wheel(QComboBox())
         self._combo_overlay_default_mode.addItem('关闭', 'off')
         self._combo_overlay_default_mode.addItem('覆盖在原文上（整体）', 'over')
         self._combo_overlay_default_mode.addItem('覆盖在原文上（分段）', 'over_para')
         self._combo_overlay_default_mode.addItem('显示在原文下方', 'below')
         form.addRow('覆盖翻译默认模式', self._combo_overlay_default_mode)
 
-        self._spin_overlay_font_delta = QSpinBox()
+        self._spin_overlay_font_delta = _no_wheel(QSpinBox())
         self._spin_overlay_font_delta.setRange(-12, 24)
         form.addRow('覆盖译文字号微调', self._spin_overlay_font_delta)
 
         self._para_check = QCheckBox()
         form.addRow('自动识别段落，分段翻译', self._para_check)
 
-        self._para_ratio_spin = QDoubleSpinBox()
+        self._para_ratio_spin = _no_wheel(QDoubleSpinBox())
         self._para_ratio_spin.setRange(0.1, 3.0)
         self._para_ratio_spin.setSingleStep(0.1)
         self._para_ratio_spin.setDecimals(1)
@@ -475,7 +488,7 @@ class SettingsWindow(QDialog):
         font_help.setStyleSheet('color: #888; font-size: 11px;')
         font_layout.addWidget(font_help)
 
-        self._combo_font_set = QComboBox()
+        self._combo_font_set = _no_wheel(QComboBox())
         self._combo_font_set.addItem('跟随皮肤默认', None)
         self._combo_font_set.addItem('Sans · Noto Sans SC', 'sans')
         self._combo_font_set.addItem('Mono · JetBrains Mono', 'mono')
@@ -496,7 +509,7 @@ class SettingsWindow(QDialog):
         icon_help.setStyleSheet('color: #888; font-size: 11px;')
         icon_layout.addWidget(icon_help)
 
-        self._combo_icon_set = QComboBox()
+        self._combo_icon_set = _no_wheel(QComboBox())
         self._combo_icon_set.addItem('跟随皮肤默认', None)
         self._combo_icon_set.addItem('Phosphor Light', 'phosphor-light')
         self._combo_icon_set.addItem('Phosphor Regular', 'phosphor-regular')
@@ -530,7 +543,10 @@ class SettingsWindow(QDialog):
         layout.addLayout(btn_row)
 
     def _load_values(self):
-        self._spin_timeout.setValue(self.settings.get('temp_box_timeout', 3))
+        timeout = self.settings.get('temp_box_timeout', 0)
+        self._chk_auto_dismiss.setChecked(timeout > 0)
+        self._spin_timeout.setValue(timeout if timeout > 0 else 3)
+        self._spin_timeout.setEnabled(timeout > 0)
         self._spin_interval.setValue(self.settings.get('auto_translate_interval', 2))
 
         target = self.settings.get('target_language', 'zh-CN')
@@ -595,9 +611,6 @@ class SettingsWindow(QDialog):
         self._chk_temp_hide_bar.setChecked(self.settings.get('temp_mode_hide_bar', True))
         dismissed = self.settings.get('temp_mode_hint_dismissed', False)
         self._btn_reset_hint.setEnabled(dismissed)
-        self._chk_temp_hide_bar.stateChanged.connect(
-            lambda state: self.settings.set('temp_mode_hide_bar', bool(state))
-        )
 
         self._refresh_dict_status()
         self._sync_dict_group_visibility()
@@ -622,7 +635,8 @@ class SettingsWindow(QDialog):
         self._combo_icon_set.setCurrentIndex(max(0, idx))
 
     def _save(self):
-        self.settings.set('temp_box_timeout', self._spin_timeout.value())
+        self.settings.set('temp_box_timeout',
+                          self._spin_timeout.value() if self._chk_auto_dismiss.isChecked() else 0)
         self.settings.set('auto_translate_interval', self._spin_interval.value())
         self.settings.set('target_language', self._combo_target.currentData())
         self.settings.set('result_bar_position', self._combo_pos.currentData())
@@ -653,6 +667,7 @@ class SettingsWindow(QDialog):
 
         self.settings.set('para_split_enabled', self._para_check.isChecked())
         self.settings.set('para_gap_ratio', self._para_ratio_spin.value())
+        self.settings.set('temp_mode_hide_bar', self._chk_temp_hide_bar.isChecked())
 
         # 皮肤
         selected_skin = next(
@@ -687,7 +702,9 @@ class SettingsWindow(QDialog):
 
     def _reset_defaults(self):
         from core.settings import DEFAULTS
-        self._spin_timeout.setValue(DEFAULTS['temp_box_timeout'])
+        self._chk_auto_dismiss.setChecked(False)
+        self._spin_timeout.setValue(3)
+        self._spin_timeout.setEnabled(False)
         self._spin_interval.setValue(DEFAULTS['auto_translate_interval'])
         idx = self._combo_target.findData(DEFAULTS['target_language'])
         if idx >= 0:
@@ -743,6 +760,19 @@ class SettingsWindow(QDialog):
 
         self._combo_font_set.setCurrentIndex(0)
         self._combo_icon_set.setCurrentIndex(0)
+
+        # 重置段落分割设置
+        if hasattr(self, '_para_check'):
+            self._para_check.setChecked(True)  # para_split_enabled 默认 True
+        if hasattr(self, '_para_ratio_spin'):
+            self._para_ratio_spin.setValue(0.5)  # para_gap_ratio 默认 0.5
+            self._para_ratio_spin.setEnabled(True)
+        # 重置临时模式设置
+        if hasattr(self, '_chk_temp_hide_bar'):
+            self._chk_temp_hide_bar.setChecked(True)  # temp_mode_hide_bar 默认 True
+
+        # 重置引导向导（下次启动重新显示）
+        self.settings.set('first_launch_done', False)
 
         self._sync_dict_group_visibility()
 
