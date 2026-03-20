@@ -793,6 +793,11 @@ class SettingsWindow(QDialog):
         self._btn_reset_hint.setEnabled(False)
 
     def _on_show_onboarding(self):
+        self.close()
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(100, self._launch_onboarding_dialog)
+
+    def _launch_onboarding_dialog(self):
         from ui.onboarding import OnboardingWizard
         from PyQt5.QtWidgets import QApplication
         from PyQt5.QtCore import Qt
@@ -802,6 +807,8 @@ class SettingsWindow(QDialog):
         dlg.adjustSize()
         dlg.move(screen.center() - dlg.rect().center())
         dlg.show()
+        dlg.raise_()
+        dlg.activateWindow()
 
     def _sync_dict_group_visibility(self):
         """根据"本地词典"是否勾选来显示/隐藏 ECDICT 分组框。"""
