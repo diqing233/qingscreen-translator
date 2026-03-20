@@ -705,7 +705,11 @@ class ResultBar(QWidget):
         self._update_translation_height()
         _ff = self._skin.get('font_family', '').split(',')[0].strip().strip('"')
         f = QFont(_ff) if _ff else QFont()
-        f.setPixelSize(int(self._skin.get('font_size_translation', 14)))
+        try:
+            _size = int(self._skin.get('font_size_translation', 14))
+        except (ValueError, TypeError):
+            _size = 14
+        f.setPixelSize(_size)
         self._lbl_translation.setFont(f)
         self._lbl_translation.setMinimumHeight(40)
         self._lbl_translation.setMinimumWidth(0)   # 防止 QTextEdit 撑宽结果条
@@ -1584,7 +1588,11 @@ class ResultBar(QWidget):
         self._lbl_translation.setStyleSheet(self._translation_text_style())
         _ff = self._skin.get('font_family', '').split(',')[0].strip().strip('"')
         _f = QFont(_ff) if _ff else QFont()
-        _f.setPixelSize(int(self._skin.get('font_size_translation', 14)))
+        try:
+            _size = int(self._skin.get('font_size_translation', 14))
+        except (ValueError, TypeError):
+            _size = 14
+        _f.setPixelSize(_size)
         self._lbl_translation.setFont(_f)
         self._source_editor.setStyleSheet(self._source_editor_style())
         self._explain_text.setStyleSheet(self._explain_text_style())
