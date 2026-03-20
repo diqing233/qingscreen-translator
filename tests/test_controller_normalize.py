@@ -135,3 +135,61 @@ def test_parse_level1_fail_level2_success():
     # Level 2: split by \n\n → ["1. a", "Second para"] → count 2 → use
     text = "1. a\n\nSecond para"
     assert _parse_paragraph_translations(text, 2) == ["1. a", "Second para"]
+
+
+def test_temp_hide_bar_routes_to_subtitle(qtbot):
+    """临时模式 + temp_mode_hide_bar=True 时，翻译结果走 box.show_subtitle，不调用 result_bar.show_result。"""
+    from unittest.mock import MagicMock
+    from core.controller import CoreController
+
+    ctrl = CoreController.__new__(CoreController)
+    ctrl._box_mode = 'temp'
+    ctrl._multi_results = {}
+
+    mock_settings = MagicMock()
+    mock_settings.get.side_effect = lambda k, d=None: {
+        'temp_mode_hide_bar': True,
+    }.get(k, d)
+    ctrl.settings = mock_settings
+
+    mock_bar = MagicMock()
+    ctrl.result_bar = mock_bar
+
+    mock_box = MagicMock()
+    mock_box.mode = 'temp'
+    mock_box._subtitle_mode = 'off'
+    mock_box._last_ocr_paragraphs = []
+    mock_box._last_paragraph_translations = []
+    mock_box._pending_auto = False
+    mock_box._pending_para_texts = []
+
+    result = {'translated': '你好', 'original': 'hello', 'paragraphs': []}
+
+    ctrl._dispatch_translation_result(result, mock_box)
+
+    mock_box.show_subtitle.assert_called_once_with('你好')
+    mock_bar.show_result.assert_not_called()
+
+
+def test_temp_hide_bar_no_box_silent(qtbot):
+    """临时模式 + temp_mode_hide_bar=True + box=None 时，静默跳过。"""
+    from unittest.mock import MagicMock
+    from core.controller import CoreController
+
+    ctrl = CoreController.__new__(CoreController)
+    ctrl._box_mode = 'temp'
+    ctrl._multi_results = {}
+
+    mock_settings = MagicMock()
+    mock_settings.get.side_effect = lambda k, d=None: {
+        'temp_mode_hide_bar': True,
+    }.get(k, d)
+    ctrl.settings = mock_settings
+
+    mock_bar = MagicMock()
+    ctrl.result_bar = mock_bar
+
+    result = {'translated': '你好', 'original': 'hello', 'paragraphs': []}
+    ctrl._dispatch_translation_result(result, None)
+
+    mock_bar.show_result.assert_not_called()

@@ -692,21 +692,39 @@ class CoreController(QObject):
         result.setdefault('paragraphs', [])
         # ────────────────────────────────────────────────────
 
-        if box is not None and self._box_mode == 'multi':
-            self._multi_results[box.box_id] = result
-            self.result_bar.show_multi_results(list(self._multi_results.values()))
+        self._dispatch_translation_result(result, box)
+
+    def _dispatch_translation_result(self, result: dict, box):
+        """翻译完成后分发结果到 result_bar 或 translation_box。"""
+        hide_bar = (
+            self._box_mode == 'temp'
+            and self.settings.get('temp_mode_hide_bar', True)
+        )
+
+        if hide_bar:
+            if box is not None:
+                box.set_overlay_mode('below')
+                translated = result.get('translated', '')
+                if translated:
+                    box.show_subtitle(translated)
+            # box 为 None 时静默跳过
         else:
-            self.result_bar.show_result(result)
+            if box is not None and self._box_mode == 'multi':
+                self._multi_results[box.box_id] = result
+                self.result_bar.show_multi_results(list(self._multi_results.values()))
+            else:
+                self.result_bar.show_result(result)
 
-        translated = result.get('translated', '')
+            translated = result.get('translated', '')
+            if box is not None:
+                setattr(box, '_last_translation', translated)
+                overlay_mode = getattr(box, '_subtitle_mode', 'off')
+                if overlay_mode == 'over_para' and getattr(box, '_last_ocr_paragraphs', []) and not getattr(box, '_last_paragraph_translations', []):
+                    self._run_paragraph_translate(box)
+                if translated and (getattr(box, '_subtitle_active', False) or overlay_mode != 'off'):
+                    box.show_subtitle(translated)
+
         if box is not None:
-            setattr(box, '_last_translation', translated)
-            overlay_mode = getattr(box, '_subtitle_mode', 'off')
-            if overlay_mode == 'over_para' and getattr(box, '_last_ocr_paragraphs', []) and not getattr(box, '_last_paragraph_translations', []):
-                self._run_paragraph_translate(box)
-            if translated and (getattr(box, '_subtitle_active', False) or overlay_mode != 'off'):
-                box.show_subtitle(translated)
-
             if box.mode == 'temp':
                 box.start_dismiss_timer()
             elif getattr(box, '_pending_auto', False):
