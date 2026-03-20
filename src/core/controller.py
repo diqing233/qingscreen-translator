@@ -621,13 +621,19 @@ class CoreController(QObject):
         from ui.onboarding import OnboardingWizard
         from PyQt5.QtWidgets import QApplication
         from PyQt5.QtCore import Qt
-        dlg = OnboardingWizard(self.settings, parent=None)
-        dlg.open_settings.connect(self._show_settings)
-        dlg.setAttribute(Qt.WA_DeleteOnClose)
+        self._onboarding_dlg = OnboardingWizard(self.settings, parent=None)
+        self._onboarding_dlg.open_settings.connect(self._show_settings_tab)
+        self._onboarding_dlg.finished.connect(lambda: setattr(self, '_onboarding_dlg', None))
+        self._onboarding_dlg.setAttribute(Qt.WA_DeleteOnClose)
         screen = QApplication.primaryScreen().availableGeometry()
-        dlg.adjustSize()
-        dlg.move(screen.center() - dlg.rect().center())
-        dlg.show()
+        self._onboarding_dlg.adjustSize()
+        self._onboarding_dlg.move(screen.center() - self._onboarding_dlg.rect().center())
+        self._onboarding_dlg.show()
+
+    def _show_settings_tab(self, tab_index: int = 0):
+        self._show_settings()
+        if hasattr(self, '_settings_win') and self._settings_win:
+            self._settings_win.go_to_tab(tab_index)
 
     def _on_overlay_requested(self, mode: str, text: str):
         boxes = list(self.box_manager._boxes.values())

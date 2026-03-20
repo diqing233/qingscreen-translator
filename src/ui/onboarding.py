@@ -15,7 +15,7 @@ class OnboardingWizard(QWidget):
     """首次使用引导向导（4 步）。"""
 
     finished = pyqtSignal()
-    open_settings = pyqtSignal()
+    open_settings = pyqtSignal(int)   # tab index: 0=通用, 1=翻译来源, 2=API密钥, 3=外观
 
     def __init__(self, settings, parent=None):
         super().__init__(parent, Qt.Dialog | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
@@ -307,13 +307,17 @@ class OnboardingWizard(QWidget):
         settings_btn = QPushButton('去设置 →')
         settings_btn.setFixedHeight(22)
         settings_btn.setStyleSheet(self._nav_btn_style())
-        settings_btn.clicked.connect(self.open_settings)
+        settings_btn.clicked.connect(self._on_open_api_settings)
         btn_row.addWidget(settings_btn)
 
         rec_layout.addLayout(btn_row)
         layout.addWidget(rec_box)
 
         return w
+
+    def _on_open_api_settings(self):
+        self.close()
+        self.open_settings.emit(2)   # 2 = API 密钥标签页
 
     def _open_zhipu_url(self):
         from PyQt5.QtGui import QDesktopServices

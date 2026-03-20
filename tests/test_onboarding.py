@@ -115,9 +115,9 @@ def test_open_settings_signal_emitted():
     store = make_store()
     wiz = OnboardingWizard(store)
     received = []
-    wiz.open_settings.connect(lambda: received.append(True))
-    wiz.open_settings.emit()
-    assert received == [True]
+    wiz.open_settings.connect(lambda tab: received.append(tab))
+    wiz.open_settings.emit(2)
+    assert received == [2]
     wiz.close()
 
 

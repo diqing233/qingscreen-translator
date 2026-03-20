@@ -126,6 +126,7 @@ class SettingsWindow(QDialog):
         layout = QVBoxLayout(self)
         layout.setSpacing(8)
         tabs = QTabWidget()
+        self._tabs = tabs
 
         # ── 通用 ──────────────────────────────────────────────
         gen = QWidget()
@@ -788,6 +789,9 @@ class SettingsWindow(QDialog):
 
         self._sync_dict_group_visibility()
 
+    def go_to_tab(self, index: int):
+        self._tabs.setCurrentIndex(index)
+
     def _on_reset_hint(self):
         self.settings.set('temp_mode_hint_dismissed', False)
         self._btn_reset_hint.setEnabled(False)
@@ -803,6 +807,7 @@ class SettingsWindow(QDialog):
         from PyQt5.QtCore import Qt
         self._onboarding_dlg = OnboardingWizard(self.settings, parent=None)
         self._onboarding_dlg.setAttribute(Qt.WA_DeleteOnClose)
+        self._onboarding_dlg.open_settings.connect(self._reopen_on_tab)
         self._onboarding_dlg.finished.connect(lambda: setattr(self, '_onboarding_dlg', None))
         screen = QApplication.primaryScreen().availableGeometry()
         self._onboarding_dlg.adjustSize()
@@ -810,6 +815,12 @@ class SettingsWindow(QDialog):
         self._onboarding_dlg.show()
         self._onboarding_dlg.raise_()
         self._onboarding_dlg.activateWindow()
+
+    def _reopen_on_tab(self, tab_index: int):
+        self.show()
+        self.raise_()
+        self.activateWindow()
+        self.go_to_tab(tab_index)
 
     def _sync_dict_group_visibility(self):
         """根据"本地词典"是否勾选来显示/隐藏 ECDICT 分组框。"""
