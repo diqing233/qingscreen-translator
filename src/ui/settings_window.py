@@ -801,14 +801,15 @@ class SettingsWindow(QDialog):
         from ui.onboarding import OnboardingWizard
         from PyQt5.QtWidgets import QApplication
         from PyQt5.QtCore import Qt
-        dlg = OnboardingWizard(self.settings, parent=None)
-        dlg.setAttribute(Qt.WA_DeleteOnClose)
+        self._onboarding_dlg = OnboardingWizard(self.settings, parent=None)
+        self._onboarding_dlg.setAttribute(Qt.WA_DeleteOnClose)
+        self._onboarding_dlg.finished.connect(lambda: setattr(self, '_onboarding_dlg', None))
         screen = QApplication.primaryScreen().availableGeometry()
-        dlg.adjustSize()
-        dlg.move(screen.center() - dlg.rect().center())
-        dlg.show()
-        dlg.raise_()
-        dlg.activateWindow()
+        self._onboarding_dlg.adjustSize()
+        self._onboarding_dlg.move(screen.center() - self._onboarding_dlg.rect().center())
+        self._onboarding_dlg.show()
+        self._onboarding_dlg.raise_()
+        self._onboarding_dlg.activateWindow()
 
     def _sync_dict_group_visibility(self):
         """根据"本地词典"是否勾选来显示/隐藏 ECDICT 分组框。"""
