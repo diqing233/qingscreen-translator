@@ -606,7 +606,7 @@ class ResultBar(QWidget):
 
         # 复制译文（工具栏快捷区）
         self._btn_copy_trans = self._icon_btn('', '复制译文到剪贴板', self._copy)
-        self._btn_copy_trans.setIcon(self._mk_icon(self._draw_copy))
+        self._btn_copy_trans.setIcon(self._ph_icon('icon_copy'))
         self._btn_copy_trans.setIconSize(QSize(16, 16))
         tb.addWidget(self._btn_copy_trans)
 
@@ -641,7 +641,7 @@ class ResultBar(QWidget):
 
         # 右侧图标按钮（固定在滚动区外，不随工具栏内容滚动）
         self._btn_history  = self._icon_btn('', '翻译历史 (History)', self.history_requested.emit)
-        self._btn_history.setIcon(self._mk_icon(self._draw_clock, 18))
+        self._btn_history.setIcon(self._ph_icon('icon_history', size=18))
         self._btn_history.setIconSize(QSize(18, 18))
         self._btn_settings = self._icon_btn('⚙', '设置 (Settings)', self.settings_requested.emit)
         self._btn_minimize = self._icon_btn('─', '最小化/展开', self._toggle_minimize)
@@ -723,7 +723,7 @@ class ResultBar(QWidget):
         self._btn_source   = self._action_btn('原文 ▼', '展开/收起原始识别文字', self._toggle_source)
         self._btn_copy_src = self._action_btn('📋 原文', '复制原始识别文字到剪贴板', self._copy_source)
         self._btn_copy_src.setText('原文')
-        self._btn_copy_src.setIcon(self._mk_icon(self._draw_copy))
+        self._btn_copy_src.setIcon(self._ph_icon('icon_copy'))
         self._btn_copy_src.setIconSize(QSize(16, 16))
         self._lbl_backend = QLabel('')
         self._lbl_backend.setStyleSheet('color: rgba(100,200,120,180); font-size: 10px;')
@@ -744,7 +744,7 @@ class ResultBar(QWidget):
         ar.addWidget(self._btn_ai)
         self._btn_para_num = self._action_btn('[#]', '显示/隐藏段落编号', self._toggle_para_numbers)
         self._btn_para_num.setText('段落')
-        self._btn_para_num.setIcon(self._mk_icon(self._draw_paragraph, 16))
+        self._btn_para_num.setIcon(self._ph_icon('icon_paragraph'))
         self._btn_para_num.setIconSize(QSize(16, 16))
         ar.addWidget(self._btn_para_num)
         ar.addStretch()
@@ -1067,81 +1067,6 @@ class ResultBar(QWidget):
         p.end()
         return QIcon(pm)
 
-    def _mk_icon(self, draw_fn, size: int = 14) -> QIcon:
-        color = self._muted_qcolor()
-        pm = QPixmap(size, size)
-        pm.fill(Qt.transparent)
-        p = QPainter(pm)
-        p.setRenderHint(QPainter.Antialiasing)
-        pen = QPen(color, 1.4, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
-        p.setPen(pen)
-        p.setBrush(Qt.NoBrush)
-        draw_fn(p, size)
-        p.end()
-        return QIcon(pm)
-
-    @staticmethod
-    def _draw_copy(p: QPainter, s: int):
-        # 后页（右上）
-        p.drawRect(int(s*0.32), int(s*0.02), int(s*0.60), int(s*0.65))
-        # 前页（左下）
-        p.drawRect(int(s*0.08), int(s*0.33), int(s*0.60), int(s*0.65))
-
-    @staticmethod
-    def _draw_broom(p: QPainter, s: int):
-        # 扫帚柄（对角线）
-        p.drawLine(int(s*0.82), int(s*0.05), int(s*0.38), int(s*0.52))
-        # 绑扎处（横杆）
-        p.drawLine(int(s*0.18), int(s*0.56), int(s*0.52), int(s*0.44))
-        # 三根刷毛
-        p.drawLine(int(s*0.18), int(s*0.56), int(s*0.04), int(s*0.95))
-        p.drawLine(int(s*0.32), int(s*0.52), int(s*0.30), int(s*0.95))
-        p.drawLine(int(s*0.52), int(s*0.44), int(s*0.60), int(s*0.92))
-
-    @staticmethod
-    def _draw_clock(p: QPainter, s: int):
-        import math
-        r = int(s * 0.41)
-        cx, cy = s // 2, s // 2
-        p.drawEllipse(cx - r, cy - r, 2*r, 2*r)
-        # 4 个刻度（12/3/6/9 点位置）
-        tick_outer = r
-        tick_inner = int(r * 0.72)
-        for angle_deg in (0, 90, 180, 270):
-            rad = math.radians(angle_deg - 90)
-            x1 = cx + int(tick_outer * math.cos(rad))
-            y1 = cy + int(tick_outer * math.sin(rad))
-            x2 = cx + int(tick_inner * math.cos(rad))
-            y2 = cy + int(tick_inner * math.sin(rad))
-            p.drawLine(x1, y1, x2, y2)
-        # 时针（指向 10 点）
-        p.drawLine(cx, cy, cx - int(r*0.45), cy - int(r*0.55))
-        # 分针（指向 12 点）
-        p.drawLine(cx, cy, cx, cy - int(r*0.72))
-
-    @staticmethod
-    def _draw_square(p: QPainter, s: int):
-        # 绘制填充的正方形（用于停止/清空按钮）
-        margin = int(s * 0.25)
-        p.setBrush(p.pen().color())  # 使用当前画笔颜色填充
-        p.drawRect(margin, margin, s - 2*margin, s - 2*margin)
-
-    @staticmethod
-    def _draw_paragraph(p: QPainter, s: int):
-        dot_r = max(2, int(s * 0.10))
-        dot_cx = int(s * 0.16)
-        line_x0 = int(s * 0.30)
-        line_x1 = int(s * 0.84)
-        old_brush = p.brush()
-        p.setBrush(p.pen().color())
-        for y_ratio in (0.22, 0.50, 0.78):
-            cy = int(s * y_ratio)
-            p.drawEllipse(dot_cx - dot_r, cy - dot_r, dot_r * 2, dot_r * 2)
-        p.setBrush(old_brush)
-        for y_ratio in (0.22, 0.50, 0.78):
-            cy = int(s * y_ratio)
-            p.drawLine(line_x0, cy, line_x1, cy)
-
     def _tb_scroll_style(self) -> str:
         s = self._skin
         return f'''
@@ -1241,7 +1166,7 @@ class ResultBar(QWidget):
         self._translation_busy = busy
         self._btn_stop_clear.setToolTip('停止或清空当前翻译内容')
         self._btn_stop_clear.setText('')
-        self._btn_stop_clear.setIcon(self._mk_icon(self._draw_square))
+        self._btn_stop_clear.setIcon(self._ph_icon('icon_square'))
         self._btn_stop_clear.setIconSize(QSize(16, 16))
         self._btn_stop_clear.setStyleSheet(self._stop_clear_btn_style(busy))
 
@@ -1643,12 +1568,12 @@ class ResultBar(QWidget):
         for btn in (self._btn_copy_trans, self._btn_history, self._btn_settings, self._btn_minimize, self._btn_close):
             btn.setStyleSheet(self._icon_btn_style())
         # 线条图标随皮肤重绘
-        self._btn_copy_trans.setIcon(self._mk_icon(self._draw_copy))
-        self._btn_copy_src.setIcon(self._mk_icon(self._draw_copy))
-        self._btn_history.setIcon(self._mk_icon(self._draw_clock, 18))
+        self._btn_copy_trans.setIcon(self._ph_icon('icon_copy'))
+        self._btn_copy_src.setIcon(self._ph_icon('icon_copy'))
+        self._btn_history.setIcon(self._ph_icon('icon_history', size=18))
         self._btn_history.setIconSize(QSize(18, 18))
-        self._btn_para_num.setIcon(self._mk_icon(self._draw_paragraph, 16))
-        self._btn_stop_clear.setIcon(self._mk_icon(self._draw_square))
+        self._btn_para_num.setIcon(self._ph_icon('icon_paragraph'))
+        self._btn_stop_clear.setIcon(self._ph_icon('icon_square'))
         self._btn_stop_clear.setIconSize(QSize(16, 16))
         # TranslateToggle
         self._toggle.set_skin(s)
