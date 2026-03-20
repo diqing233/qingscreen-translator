@@ -3,7 +3,7 @@ import os
 from typing import Any
 
 DEFAULTS = {
-    'temp_box_timeout': 3,
+    'temp_box_timeout': 0,
     'auto_translate_interval': 2,
     'target_language': 'zh-CN',
     'source_language': 'auto',
@@ -28,6 +28,7 @@ DEFAULTS = {
     'icon_set': None,
     'temp_mode_hide_bar': True,
     'temp_mode_hint_dismissed': False,
+    'first_launch_done': False,
     'translation_order': ['dictionary', 'bing', 'google', 'baidu', 'deepl', 'zhipu', 'siliconflow', 'moonshot', 'deepseek', 'openai', 'claude', 'sogou', 'youdao'],
     'enabled_backends': ['bing', 'google', 'zhipu'],
     'api_keys': {
@@ -63,8 +64,10 @@ class SettingsStore:
                 pass
 
     def _save(self):
-        with open(self._path, 'w', encoding='utf-8') as f:
+        tmp = self._path + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
             json.dump(self._data, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, self._path)
 
     def get(self, key: str, default: Any = None):
         return self._data.get(key, default)

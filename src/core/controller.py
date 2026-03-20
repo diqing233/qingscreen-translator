@@ -128,6 +128,9 @@ class CoreController(QObject):
         self._refresh_mode_tooltips()
         logger.info('ScreenTranslator started')
 
+        if not self.settings.get('first_launch_done', False):
+            QTimer.singleShot(400, self._show_onboarding)
+
     # ── OCR payload 规范化 ───────────────────────────────────────
 
     def _normalize_ocr_payload(self, payload: dict) -> dict:
@@ -457,7 +460,7 @@ class CoreController(QObject):
         target = self.settings.get('target_language', 'zh-CN')
         source = self.settings.get('source_language', 'auto')
         setattr(box, '_paragraph_translation_pending', True)
-        setattr(box, '_pending_paragraph_translations', [''] * len(paragraphs))
+        setattr(box, '_pending_paragraph_translations', [None] * len(paragraphs))
         self.result_bar.set_stop_clear_busy(True)
 
         for index, paragraph in enumerate(paragraphs):
@@ -492,7 +495,7 @@ class CoreController(QObject):
             return
         translations[index] = result.get('translated', '')
         setattr(box, '_pending_paragraph_translations', translations)
-        if all(translations):
+        if all(t is not None for t in translations):
             setattr(box, '_paragraph_translation_pending', False)
             self._on_paragraph_translate_done(translations, box, worker=None)
 
@@ -578,7 +581,7 @@ class CoreController(QObject):
         self.result_bar.show_explain_loading()
         worker = ExplainWorker(text, ai)
         worker.result_ready.connect(self.result_bar.show_explain)
-        worker.error_occurred.connect(self.result_bar.show_explain)
+        worker.error_occurred.connect(self.result_bar.show_error)
         worker.finished.connect(lambda: self._cleanup_worker(worker))
         self._workers.append(worker)
         worker.start()
@@ -598,7 +601,7 @@ class CoreController(QObject):
 
     def _show_settings(self):
         from ui.settings_window import SettingsWindow
-        if not hasattr(self, '_settings_win') or self._settings_win is None or not self._settings_win.isVisible():
+        if not hasattr(self, '_settings_win') or self._settings_win is None:
             self._settings_win = SettingsWindow(self.settings)
             self._settings_win.settings_saved.connect(self.router.reload)
             self._settings_win.settings_saved.connect(self.result_bar.refresh_opacity)
@@ -608,10 +611,23 @@ class CoreController(QObject):
             self._settings_win.settings_saved.connect(self._refresh_overlay_font_styles)
             self._settings_win.settings_saved.connect(self.result_bar.sync_para_mode_from_settings)
             self._settings_win.settings_saved.connect(self._apply_skin_to_boxes)
-            self._settings_win.show()
-        else:
-            self._settings_win.activateWindow()
-            self._settings_win.raise_()
+        if hasattr(self._settings_win, '_load_values'):
+            self._settings_win._load_values()
+        self._settings_win.show()
+        self._settings_win.raise_()
+        self._settings_win.activateWindow()
+
+    def _show_onboarding(self):
+        from ui.onboarding import OnboardingWizard
+        from PyQt5.QtWidgets import QApplication
+        from PyQt5.QtCore import Qt
+        dlg = OnboardingWizard(self.settings, parent=None)
+        dlg.open_settings.connect(self._show_settings)
+        dlg.setAttribute(Qt.WA_DeleteOnClose)
+        screen = QApplication.primaryScreen().availableGeometry()
+        dlg.adjustSize()
+        dlg.move(screen.center() - dlg.rect().center())
+        dlg.show()
 
     def _on_overlay_requested(self, mode: str, text: str):
         boxes = list(self.box_manager._boxes.values())
@@ -707,7 +723,10 @@ class CoreController(QObject):
                 translated = result.get('translated', '')
                 if translated:
                     box.show_subtitle(translated)
-            # box 为 None 时静默跳过
+                setattr(box, '_last_translation', translated)
+            else:
+                # retranslate 没有 box，回退到 result_bar 显示
+                self.result_bar.show_result(result)
         else:
             if box is not None and self._box_mode == 'multi':
                 self._multi_results[box.box_id] = result
