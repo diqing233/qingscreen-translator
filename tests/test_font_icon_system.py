@@ -155,3 +155,34 @@ def test_settings_defaults_include_font_and_icon_set():
     assert 'icon_set' in DEFAULTS
     assert DEFAULTS['font_set'] is None
     assert DEFAULTS['icon_set'] is None
+
+
+def test_result_bar_skin_has_font_tokens():
+    """所有皮肤的 font_family 和 font_size_translation 必须存在且类型正确。"""
+    for sid in theme.list_skins():
+        skin = theme.get_skin(sid)
+        assert 'font_family' in skin
+        assert 'font_size_translation' in skin
+        assert isinstance(skin['font_size_translation'], int)
+
+
+def test_icon_codepoints_are_nonempty_strings():
+    """所有图标 codepoint 必须是非空字符串。"""
+    icon_codepoint_keys = [
+        'icon_copy', 'icon_close', 'icon_translate', 'icon_ai',
+        'icon_pin', 'icon_unpin', 'icon_expand', 'icon_collapse',
+        'icon_font_up', 'icon_font_down', 'icon_settings', 'icon_history',
+        'icon_paragraph', 'icon_broom', 'icon_square',
+    ]
+    for set_name, ic in theme.ICON_SETS.items():
+        for key in icon_codepoint_keys:
+            val = ic.get(key, '')
+            assert isinstance(val, str) and len(val) > 0, \
+                f"ICON_SETS['{set_name}']['{key}'] is empty"
+
+
+def test_font_family_strings_are_nonempty():
+    """所有字体集的 font_family 必须是非空字符串。"""
+    for name, fs in theme.FONT_SETS.items():
+        assert isinstance(fs['font_family'], str)
+        assert len(fs['font_family']) > 0
