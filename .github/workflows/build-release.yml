@@ -30,6 +30,11 @@ jobs:
           pip install pyinstaller>=6.0
           pip install -r requirements.txt
 
+      - name: Generate icons
+        run: |
+          pip install Pillow
+          python build/generate_icons.py
+
       - name: Build with PyInstaller
         run: |
           pyinstaller build/screen_translator.spec --noconfirm
@@ -75,6 +80,11 @@ jobs:
         run: |
           pip install pyinstaller>=6.0
           pip install -r requirements.txt
+
+      - name: Generate icons
+        run: |
+          pip install Pillow
+          python build/generate_icons.py
 
       - name: Build with PyInstaller
         run: |

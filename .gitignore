@@ -4,3 +4,5 @@ __pycache__/
 .env
 ~/.screen_translator/
 .worktrees/
+build/icon.ico
+build/icon.icns
