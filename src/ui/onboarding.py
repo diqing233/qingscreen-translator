@@ -316,8 +316,7 @@ class OnboardingWizard(QWidget):
         return w
 
     def _on_open_api_settings(self):
-        self.close()
-        self.open_settings.emit(2)   # 2 = API 密钥标签页
+        self.open_settings.emit(2)   # 2 = API 密钥标签页，不关闭向导
 
     def _open_zhipu_url(self):
         from PyQt5.QtGui import QDesktopServices
