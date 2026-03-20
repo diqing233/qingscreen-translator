@@ -440,6 +440,7 @@ class ResultBar(QWidget):
         self._synced_source_text = ''
         self._syncing_source_editor = False
         self._minimized = False
+        self._startup_hint_checked = False
         self._drag_pos = QPoint()
         self._box_mode = 'fixed'
         self._overlay_mode = self.settings.get('overlay_default_mode', 'off')
@@ -1545,6 +1546,12 @@ class ResultBar(QWidget):
         self._update_translation_height()
         self._update_explain_height()
         self._apply_splitter_sizes()
+        if not self._startup_hint_checked:
+            self._startup_hint_checked = True
+            if (self._box_mode == 'temp'
+                    and self._settings.get('temp_mode_hide_bar', True)
+                    and not self._settings.get('temp_mode_hint_dismissed', False)):
+                QTimer.singleShot(300, self._show_temp_mode_hint)
 
     def enterEvent(self, event):
         self.raise_()
